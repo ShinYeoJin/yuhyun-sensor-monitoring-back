@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.json({ message: "Server is running!" });
+  res.json({ message: "CI/CD test success!" });
 });
 
 const PORT = process.env.PORT || 3000;
