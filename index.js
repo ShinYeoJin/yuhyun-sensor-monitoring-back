@@ -73,7 +73,7 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     } else {
       const latest = [...measurements].sort((a,b) => a.measuredAt > b.measuredAt ? -1 : 1)[0]
       await client.query(
-        `INSERT INTO sensor_status (sensor_id, status, last_measured, updated_at) VALUES ($1,'normal',$2,NOW()) ON CONFLICT (sensor_id) DO UPDATE SET last_measured=$2, updated_at=NOW()`,
+        `INSERT INTO sensor_status (sensor_id, status, last_measured, updated_at) VALUES ($1,'normal',$2,NOW()) ON CONFLICT (sensor_id) DO UPDATE SET status='normal', last_measured=$2, updated_at=NOW()`,
         [sensor.id, latest.measuredAt]
       )
     }
