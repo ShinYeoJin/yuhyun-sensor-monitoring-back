@@ -2,6 +2,11 @@ require('dotenv').config()
 const express  = require('express')
 const cors     = require('cors')
 const { Pool } = require('pg')
+const jwt      = require('jsonwebtoken')
+const bcrypt   = require('bcryptjs')
+const multer   = require('multer')
+const path     = require('path')
+const fs       = require('fs')
 
 const app = express()
 const pool = new Pool({
@@ -9,14 +14,43 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 })
 
-app.use(cors({
-  origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'],
-}))
+const JWT_SECRET = process.env.JWT_SECRET || 'geomonitor-jwt-secret-2026'
+const UPLOAD_DIR = path.join(__dirname, 'uploads')
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    cb(null, unique + path.extname(file.originalname))
+  }
+})
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
+
+app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'] }))
 app.use(express.json({ limit: '20mb' }))
 
 function requireKey(req, res, next) {
   if (req.headers['x-api-key'] !== process.env.AGENT_API_KEY)
     return res.status(401).json({ error: 'Unauthorized' })
+  next()
+}
+
+function requireAuth(req, res, next) {
+  const auth = req.headers.authorization
+  if (!auth || !auth.startsWith('Bearer '))
+    return res.status(401).json({ error: 'No token provided' })
+  try {
+    req.user = jwt.verify(auth.slice(7), JWT_SECRET)
+    next()
+  } catch {
+    res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Admin only' })
   next()
 }
 
@@ -32,17 +66,140 @@ async function maybeCreateAlarm(client, sensor, status, value) {
   if (status === 'normal' || status === 'offline') return
   const dup = await client.query(
     `SELECT id FROM alarm_events WHERE sensor_id=$1 AND severity=$2 AND is_acknowledged=false LIMIT 1`,
-    [sensor.id, status]
-  )
+    [sensor.id, status])
   if (dup.rows.length > 0) return
   const threshVal = status === 'danger' ? sensor.threshold_danger_min : sensor.threshold_normal_max
   await client.query(
     `INSERT INTO alarm_events (sensor_id, severity, message, triggered_value, threshold_value) VALUES ($1,$2,$3,$4,$5)`,
     [sensor.id, status,
       status === 'danger' ? `위험 임계값(${threshVal}) 초과 — 즉시 점검 필요` : `주의 임계값(${threshVal}) 도달 — 모니터링 강화 필요`,
-      value, threshVal]
-  )
+      value, threshVal])
 }
+
+app.post('/api/auth/register', async (req, res) => {
+  const { username, email, password, role = 'user' } = req.body
+  if (!username || !email || !password)
+    return res.status(400).json({ error: 'username, email, password 필수' })
+  try {
+    const hash = await bcrypt.hash(password, 10)
+    const { rows } = await pool.query(
+      `INSERT INTO users (username, email, password_hash, role) VALUES ($1,$2,$3,$4) RETURNING id, username, email, role`,
+      [username, email, hash, role])
+    res.status(201).json({ success: true, user: rows[0] })
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: '이미 존재하는 username 또는 email' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body
+  if (!email || !password)
+    return res.status(400).json({ error: 'email, password 필수' })
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM users WHERE email=$1 AND is_deleted=false`, [email])
+    if (rows.length === 0) return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' })
+    const user = rows[0]
+    if (!user.is_active) return res.status(401).json({ error: '비활성화된 계정입니다' })
+    const valid = await bcrypt.compare(password, user.password_hash)
+    if (!valid) return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' })
+    await pool.query(`UPDATE users SET last_login=NOW() WHERE id=$1`, [user.id])
+    const token = jwt.sign(
+      { id: user.id, username: user.username, email: user.email, role: user.role },
+      JWT_SECRET, { expiresIn: '24h' })
+    res.json({ success: true, token, user: { id: user.id, username: user.username, email: user.email, role: user.role } })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  res.json({ success: true, message: '로그아웃 완료' })
+})
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, email, role, is_active, created_at, last_login FROM users WHERE id=$1`, [req.user.id])
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' })
+    res.json(rows[0])
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, email, role, is_active, is_deleted, created_at, last_login FROM users ORDER BY created_at DESC`)
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.get('/api/users/active', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, email, role, is_active, created_at, last_login FROM users WHERE is_active=true AND is_deleted=false ORDER BY created_at DESC`)
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.patch('/api/users/:id/deactivate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [req.params.id])
+    res.json({ success: true, message: '사용자 비활성화 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.patch('/api/users/:id/activate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`UPDATE users SET is_active=true WHERE id=$1`, [req.params.id])
+    res.json({ success: true, message: '사용자 활성화 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`UPDATE users SET is_deleted=true, is_active=false WHERE id=$1`, [req.params.id])
+    res.json({ success: true, message: '사용자 삭제 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.post('/api/files/upload', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO files (filename, original_name, file_path, file_size, mime_type, uploaded_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.file.filename, req.file.originalname, req.file.path, req.file.size, req.file.mimetype, req.user.id])
+    res.status(201).json({ success: true, file: rows[0] })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.get('/api/files', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT f.*, u.username AS uploaded_by_name FROM files f LEFT JOIN users u ON f.uploaded_by=u.id ORDER BY f.created_at DESC`)
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.get('/api/files/:id/download', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM files WHERE id=$1`, [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다' })
+    const file = rows[0]
+    if (!fs.existsSync(file.file_path)) return res.status(404).json({ error: '파일이 서버에 없습니다' })
+    res.download(file.file_path, file.original_name)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.delete('/api/files/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM files WHERE id=$1`, [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다' })
+    const file = rows[0]
+    if (fs.existsSync(file.file_path)) fs.unlinkSync(file.file_path)
+    await pool.query(`DELETE FROM files WHERE id=$1`, [req.params.id])
+    res.json({ success: true, message: '파일 삭제 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
 
 app.post('/api/ingest', requireKey, async (req, res) => {
   const { sensorCode, measurements, rawFile } = req.body
@@ -58,8 +215,7 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     for (const m of measurements) {
       const r = await client.query(
         `INSERT INTO measurements (sensor_id, measured_at, value, depth_label, raw_file) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (sensor_id, measured_at, depth_label) DO NOTHING RETURNING id`,
-        [sensor.id, m.measuredAt, m.value, m.depthLabel ?? null, rawFile ?? null]
-      )
+        [sensor.id, m.measuredAt, m.value, m.depthLabel ?? null, rawFile ?? null])
       if (r.rowCount > 0) inserted++
     }
     if (sensor.sensor_type === 'water_level') {
@@ -67,15 +223,13 @@ app.post('/api/ingest', requireKey, async (req, res) => {
       const status = evalStatus(latest.value, sensor)
       await client.query(
         `INSERT INTO sensor_status (sensor_id, current_value, status, last_measured, updated_at) VALUES ($1,$2,$3,$4,NOW()) ON CONFLICT (sensor_id) DO UPDATE SET current_value=$2, status=$3, last_measured=$4, updated_at=NOW()`,
-        [sensor.id, latest.value, status, latest.measuredAt]
-      )
+        [sensor.id, latest.value, status, latest.measuredAt])
       await maybeCreateAlarm(client, sensor, status, latest.value)
     } else {
       const latest = [...measurements].sort((a,b) => a.measuredAt > b.measuredAt ? -1 : 1)[0]
       await client.query(
         `INSERT INTO sensor_status (sensor_id, status, last_measured, updated_at) VALUES ($1,'normal',$2,NOW()) ON CONFLICT (sensor_id) DO UPDATE SET status='normal', last_measured=$2, updated_at=NOW()`,
-        [sensor.id, latest.measuredAt]
-      )
+        [sensor.id, latest.measuredAt])
     }
     await client.query('COMMIT')
     res.json({ success: true, sensorCode, inserted, total: measurements.length })
@@ -87,7 +241,11 @@ app.post('/api/ingest', requireKey, async (req, res) => {
 })
 
 app.get('/api/sensors', async (req, res) => {
+  const { status } = req.query
   try {
+    let where = 'WHERE s.is_active = true'
+    const params = []
+    if (status) { params.push(status); where += ` AND ss.status = $${params.length}` }
     const { rows } = await pool.query(`
       SELECT s.id, s.sensor_code, s.manage_no, s.name, s.sensor_type, s.unit, s.field,
              s.location_desc, s.install_date, s.threshold_normal_max, s.threshold_warning_max, s.threshold_danger_min,
@@ -95,7 +253,7 @@ app.get('/api/sensors', async (req, res) => {
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
-      WHERE s.is_active = true ORDER BY s.id`)
+      ${where} ORDER BY s.id`, params)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
