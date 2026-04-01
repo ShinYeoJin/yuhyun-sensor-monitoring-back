@@ -7,6 +7,196 @@ const bcrypt   = require('bcryptjs')
 const multer   = require('multer')
 const path     = require('path')
 const fs       = require('fs')
+const swaggerUi = require('swagger-ui-express')
+const swaggerJsdoc = require('swagger-jsdoc')
+
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'GeoMonitor API',
+      version: '1.0.0',
+      description: '지반 계측 모니터링 시스템 API',
+    },
+    servers: [{ url: 'https://yuhyun-sensor-monitoring-back.onrender.com' }],
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
+      }
+    },
+    security: [{ bearerAuth: [] }],
+    tags: [
+      { name: '인증', description: '회원가입 / 로그인 / 로그아웃' },
+      { name: '센서', description: '센서 조회 및 측정값' },
+      { name: '알람', description: '알람 조회 및 처리' },
+      { name: '대시보드', description: '대시보드 요약' },
+      { name: '사용자', description: '사용자 관리' },
+      { name: '파일', description: '파일 업로드 / 다운로드' },
+      { name: '시스템', description: '헬스체크' },
+    ],
+    paths: {
+      '/api/health': {
+        get: {
+          tags: ['시스템'],
+          summary: 'DB 연결 상태 확인',
+          responses: { 200: { description: 'DB 연결 정상' } }
+        }
+      },
+      '/api/auth/register': {
+        post: {
+          tags: ['인증'],
+          summary: '회원가입',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              username: { type: 'string', example: 'user1' },
+              email: { type: 'string', example: 'user1@example.com' },
+              password: { type: 'string', example: 'password123' },
+              role: { type: 'string', example: 'user' }
+            }, required: ['username', 'email', 'password'] } } }
+          },
+          responses: { 201: { description: '회원가입 성공' } }
+        }
+      },
+      '/api/auth/login': {
+        post: {
+          tags: ['인증'],
+          summary: '로그인',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              email: { type: 'string', example: 'admin@geomonitor.com' },
+              password: { type: 'string', example: 'admin1234' }
+            }, required: ['email', 'password'] } } }
+          },
+          responses: { 200: { description: '로그인 성공 (JWT 토큰 반환)' } }
+        }
+      },
+      '/api/auth/logout': {
+        post: { tags: ['인증'], summary: '로그아웃', security: [{ bearerAuth: [] }], responses: { 200: { description: '로그아웃 성공' } } }
+      },
+      '/api/auth/me': {
+        get: { tags: ['인증'], summary: '내 정보 조회', security: [{ bearerAuth: [] }], responses: { 200: { description: '사용자 정보' } } }
+      },
+      '/api/sensors': {
+        get: {
+          tags: ['센서'],
+          summary: '센서 목록 조회',
+          parameters: [{ name: 'status', in: 'query', schema: { type: 'string', enum: ['normal', 'warning', 'danger', 'offline'] } }],
+          responses: { 200: { description: '센서 목록' } }
+        }
+      },
+      '/api/sensors/{id}': {
+        get: {
+          tags: ['센서'],
+          summary: '센서 상세 조회',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          responses: { 200: { description: '센서 상세' } }
+        }
+      },
+      '/api/sensors/{id}/measurements': {
+        get: {
+          tags: ['센서'],
+          summary: '센서 측정값 조회',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+            { name: 'from', in: 'query', schema: { type: 'string' } },
+            { name: 'to', in: 'query', schema: { type: 'string' } },
+            { name: 'depthLabel', in: 'query', schema: { type: 'string' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer' } }
+          ],
+          responses: { 200: { description: '측정값 목록' } }
+        }
+      },
+      '/api/sensors/{id}/depths': {
+        get: {
+          tags: ['센서'],
+          summary: '센서 깊이 목록 조회',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          responses: { 200: { description: '깊이 목록' } }
+        }
+      },
+      '/api/alarms': {
+        get: {
+          tags: ['알람'],
+          summary: '알람 목록 조회',
+          parameters: [
+            { name: 'acknowledged', in: 'query', schema: { type: 'boolean' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer' } }
+          ],
+          responses: { 200: { description: '알람 목록' } }
+        }
+      },
+      '/api/alarms/{id}/acknowledge': {
+        patch: {
+          tags: ['알람'],
+          summary: '알람 확인 처리',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          requestBody: {
+            content: { 'application/json': { schema: { type: 'object', properties: { acknowledgedBy: { type: 'string' } } } } }
+          },
+          responses: { 200: { description: '알람 확인 완료' } }
+        }
+      },
+      '/api/dashboard': {
+        get: { tags: ['대시보드'], summary: '대시보드 요약 조회', responses: { 200: { description: '대시보드 데이터' } } }
+      },
+      '/api/users': {
+        get: { tags: ['사용자'], summary: '전체 사용자 목록 (admin)', security: [{ bearerAuth: [] }], responses: { 200: { description: '사용자 목록' } } }
+      },
+      '/api/users/active': {
+        get: { tags: ['사용자'], summary: '활성 사용자 목록 (admin)', security: [{ bearerAuth: [] }], responses: { 200: { description: '활성 사용자 목록' } } }
+      },
+      '/api/users/{id}/deactivate': {
+        patch: { tags: ['사용자'], summary: '사용자 비활성화 (admin)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: '비활성화 완료' } } }
+      },
+      '/api/users/{id}/activate': {
+        patch: { tags: ['사용자'], summary: '사용자 활성화 (admin)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: '활성화 완료' } } }
+      },
+      '/api/users/{id}': {
+        delete: { tags: ['사용자'], summary: '사용자 삭제 (admin)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: '삭제 완료' } } }
+      },
+      '/api/files': {
+        get: { tags: ['파일'], summary: '파일 목록 조회', security: [{ bearerAuth: [] }], responses: { 200: { description: '파일 목록' } } }
+      },
+      '/api/files/upload': {
+        post: {
+          tags: ['파일'],
+          summary: '파일 업로드',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            content: { 'multipart/form-data': { schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } } }
+          },
+          responses: { 201: { description: '업로드 성공' } }
+        }
+      },
+      '/api/files/{id}/download': {
+        get: { tags: ['파일'], summary: '파일 다운로드', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: '파일 다운로드' } } }
+      },
+      '/api/files/{id}': {
+        delete: { tags: ['파일'], summary: '파일 삭제', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: '삭제 완료' } } }
+      },
+      '/api/ingest': {
+        post: {
+          tags: ['센서'],
+          summary: '센서 데이터 수신 (에이전트용)',
+          security: [],
+          requestBody: {
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              sensorCode: { type: 'string' },
+              measurements: { type: 'array', items: { type: 'object' } }
+            } } } }
+          },
+          responses: { 200: { description: '수신 성공' } }
+        }
+      }
+    }
+  },
+  apis: [],
+}
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 const app = express()
 const pool = new Pool({
