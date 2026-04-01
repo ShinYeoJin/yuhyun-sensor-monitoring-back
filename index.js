@@ -228,8 +228,8 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     } else {
       const latest = [...measurements].sort((a,b) => a.measuredAt > b.measuredAt ? -1 : 1)[0]
       await client.query(
-        `INSERT INTO sensor_status (sensor_id, status, last_measured, updated_at) VALUES ($1,'normal',$2,NOW()) ON CONFLICT (sensor_id) DO UPDATE SET status='normal', last_measured=$2, updated_at=NOW()`,
-        [sensor.id, latest.measuredAt])
+        `INSERT INTO sensor_status (sensor_id, current_value, status, last_measured, updated_at) VALUES ($1,$2,'normal',$3,NOW()) ON CONFLICT (sensor_id) DO UPDATE SET current_value=$2, status='normal', last_measured=$3, updated_at=NOW()`,
+        [sensor.id, latest.value, latest.measuredAt])
     }
     await client.query('COMMIT')
     res.json({ success: true, sensorCode, inserted, total: measurements.length })
@@ -278,8 +278,24 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
     let where = 'WHERE m.sensor_id=$1'
     if (from)       { params.push(from);       where += ` AND m.measured_at >= $${params.length}` }
     if (to)         { params.push(to);         where += ` AND m.measured_at <= $${params.length}` }
-    if (depthLabel) { params.push(depthLabel); where += ` AND m.depth_label = $${params.length}` }
-    else            { where += ' AND m.depth_label IS NULL' }
+    if (depthLabel) {
+      params.push(depthLabel)
+      where += ` AND m.depth_label = $${params.length}`
+    } else {
+      // depth_label이 없으면 NULL 우선, 없으면 첫 번째 depth_label 사용
+      const depthCheck = await pool.query(
+        `SELECT depth_label FROM measurements WHERE sensor_id=$1 AND depth_label IS NULL LIMIT 1`, [req.params.id])
+      if (depthCheck.rows.length > 0) {
+        where += ' AND m.depth_label IS NULL'
+      } else {
+        const firstDepth = await pool.query(
+          `SELECT depth_label FROM measurements WHERE sensor_id=$1 AND depth_label IS NOT NULL ORDER BY depth_label LIMIT 1`, [req.params.id])
+        if (firstDepth.rows.length > 0) {
+          params.push(firstDepth.rows[0].depth_label)
+          where += ` AND m.depth_label = $${params.length}`
+        }
+      }
+    }
     params.push(Number(limit))
     const { rows } = await pool.query(
       `SELECT m.measured_at, m.value, m.depth_label FROM measurements m ${where} ORDER BY m.measured_at ASC LIMIT $${params.length}`, params)
