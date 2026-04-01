@@ -196,7 +196,6 @@ const swaggerOptions = {
 }
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions)
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 const app = express()
 const pool = new Pool({
@@ -219,6 +218,7 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
 app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'] }))
 app.use(express.json({ limit: '20mb' }))
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 function requireKey(req, res, next) {
   if (req.headers['x-api-key'] !== process.env.AGENT_API_KEY)
