@@ -339,6 +339,16 @@ app.get('/api/users/list', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.patch('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  const { username, email, role } = req.body
+  try {
+    await pool.query(
+      `UPDATE users SET username=$1, email=$2, role=$3 WHERE id=$4`,
+      [username, email, role, req.params.id])
+    res.json({ success: true, message: '사용자 정보 수정 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.patch('/api/users/:id/deactivate', requireAuth, requireAdmin, async (req, res) => {
   try {
     await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [req.params.id])
