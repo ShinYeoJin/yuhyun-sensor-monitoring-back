@@ -331,6 +331,14 @@ app.get('/api/users/active', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.get('/api/users/list', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, email, role FROM users WHERE is_active=true AND is_deleted=false ORDER BY created_at DESC`)
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.patch('/api/users/:id/deactivate', requireAuth, requireAdmin, async (req, res) => {
   try {
     await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [req.params.id])

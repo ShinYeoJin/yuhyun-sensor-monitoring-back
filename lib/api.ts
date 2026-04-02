@@ -67,6 +67,7 @@ export const dashboardApi = {
 export const userApi = {
   getAll: () => request('/api/users'),
   getActive: () => request('/api/users/active'),
+  getList: () => request('/api/users/list'),  // 인증 없이 사용자 목록
   deactivate: (id: number) => request(`/api/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: number) => request(`/api/users/${id}/activate`, { method: 'PATCH' }),
   delete: (id: number) => request(`/api/users/${id}`, { method: 'DELETE' }),
