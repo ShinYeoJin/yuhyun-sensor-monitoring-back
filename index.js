@@ -370,6 +370,19 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.patch('/api/users/:id/edit', requireAuth, requireAdmin, async (req, res) => {
+  const { username, email, role } = req.body
+  try {
+    await pool.query(
+      `UPDATE users SET username=$1, email=$2, role=$3 WHERE id=$4`,
+      [username, email, role, req.params.id])
+    res.json({ success: true, message: '사용자 정보 수정 완료' })
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: '이미 존재하는 username 또는 email' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.post('/api/files/upload', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
   try {
