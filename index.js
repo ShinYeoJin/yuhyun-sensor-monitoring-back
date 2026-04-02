@@ -461,6 +461,23 @@ app.post('/api/ingest', requireKey, async (req, res) => {
   } finally { client.release() }
 })
 
+app.get('/api/sites', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM sites ORDER BY id`)
+    res.json(rows.map(s => ({ ...s, managers: JSON.parse(s.managers || '[]') })))
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.patch('/api/sites/:id', async (req, res) => {
+  const { name, location, description, managers } = req.body
+  try {
+    await pool.query(
+      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4 WHERE id=$5`,
+      [name, location, description, JSON.stringify(managers || []), req.params.id])
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.get('/api/sensors', async (req, res) => {
   const { status } = req.query
   try {

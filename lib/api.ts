@@ -99,3 +99,10 @@ export const fileApi = {
 
   delete: (id: number) => request(`/api/files/${id}`, { method: 'DELETE' }),
 }
+
+// ─── 사이트 ───────────────────────────────────────────────────────────────────
+export const siteApi = {
+  getAll: () => request('/api/sites'),
+  update: (id: number, body: { name: string; location: string; description: string; managers: string[] }) =>
+    request(`/api/sites/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+}
