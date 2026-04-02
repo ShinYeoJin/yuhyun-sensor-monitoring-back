@@ -334,7 +334,7 @@ app.get('/api/users/active', requireAuth, requireAdmin, async (req, res) => {
 app.get('/api/users/list', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, email, role, phone, is_active FROM users WHERE is_active=true AND is_deleted=false ORDER BY created_at DESC`)
+      `SELECT id, username, email, role, phone, is_active FROM users WHERE is_deleted=false ORDER BY created_at DESC`)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
