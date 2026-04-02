@@ -479,6 +479,16 @@ app.get('/api/sensors/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.patch('/api/sensors/:id/threshold', async (req, res) => {
+  const { threshold_normal_max, threshold_warning_max, threshold_danger_min } = req.body
+  try {
+    await pool.query(
+      `UPDATE sensors SET threshold_normal_max=$1, threshold_warning_max=$2, threshold_danger_min=$3 WHERE id=$4`,
+      [threshold_normal_max, threshold_warning_max, threshold_danger_min, req.params.id])
+    res.json({ success: true, message: '임계값 수정 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.get('/api/sensors/:id/measurements', async (req, res) => {
   const { from, to, depthLabel, limit = 2000 } = req.query
   try {
