@@ -267,14 +267,14 @@ async function maybeCreateAlarm(client, sensor, status, value) {
 }
 
 app.post('/api/auth/register', async (req, res) => {
-  const { username, email, password, role = 'user' } = req.body
+  const { username, email, password, role = 'user', phone = '' } = req.body
   if (!username || !email || !password)
     return res.status(400).json({ error: 'username, email, password 필수' })
   try {
     const hash = await bcrypt.hash(password, 10)
     const { rows } = await pool.query(
-      `INSERT INTO users (username, email, password_hash, role) VALUES ($1,$2,$3,$4) RETURNING id, username, email, role`,
-      [username, email, hash, role])
+      `INSERT INTO users (username, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5) RETURNING id, username, email, role, phone`,
+      [username, email, hash, role, phone])
     res.status(201).json({ success: true, user: rows[0] })
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: '이미 존재하는 username 또는 email' })
@@ -318,7 +318,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, email, role, is_active, is_deleted, created_at, last_login FROM users ORDER BY created_at DESC`)
+      `SELECT id, username, email, role, phone, is_active, is_deleted, created_at, last_login FROM users ORDER BY created_at DESC`)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -334,7 +334,7 @@ app.get('/api/users/active', requireAuth, requireAdmin, async (req, res) => {
 app.get('/api/users/list', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, email, role FROM users WHERE is_active=true AND is_deleted=false ORDER BY created_at DESC`)
+      `SELECT id, username, email, role, phone FROM users WHERE is_active=true AND is_deleted=false ORDER BY created_at DESC`)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -371,11 +371,11 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
 })
 
 app.patch('/api/users/:id/edit', requireAuth, requireAdmin, async (req, res) => {
-  const { username, email, role } = req.body
+  const { username, email, role, phone = '' } = req.body
   try {
     await pool.query(
-      `UPDATE users SET username=$1, email=$2, role=$3 WHERE id=$4`,
-      [username, email, role, req.params.id])
+      `UPDATE users SET username=$1, email=$2, role=$3, phone=$4 WHERE id=$5`,
+      [username, email, role, phone, req.params.id])
     res.json({ success: true, message: '사용자 정보 수정 완료' })
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: '이미 존재하는 username 또는 email' })
