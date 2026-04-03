@@ -190,7 +190,7 @@ const swaggerOptions = {
           },
           responses: { 200: { description: '수신 성공' } }
         }
-      }
+      },
       '/api/sites': {
         get: {
           tags: ['현장'],
