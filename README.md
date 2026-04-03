@@ -57,11 +57,13 @@ PORT=4000
 | POST | /api/auth/register | 회원가입 | - |
 | POST | /api/auth/login | 로그인 | - |
 | POST | /api/auth/logout | 로그아웃 | JWT |
+| POST | /api/sites | 현장 추가 | - |
 | GET | /api/auth/me | 내 정보 | JWT |
 | GET | /api/sensors | 센서 목록 | - |
 | GET | /api/sensors/:id | 센서 상세 | - |
 | GET | /api/sensors/:id/measurements | 측정값 | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
+| GET | /api/users/list | 사용자 목록 (인증 없음) | - |
 | PATCH | /api/sensors/:id/threshold | 임계값 수정 | - |
 | POST | /api/ingest | 센서 데이터 수신 | API Key |
 | GET | /api/alarms | 알람 목록 | - |
@@ -71,6 +73,8 @@ PORT=4000
 | PATCH | /api/users/:id/edit | 사용자 수정 | JWT+Admin |
 | PATCH | /api/users/:id/deactivate | 비활성화 | JWT+Admin |
 | PATCH | /api/users/:id/activate | 활성화 | JWT+Admin |
+| PATCH | /api/sites/:id | 현장 수정 (담당자 포함) | - |
+| PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | - |
 | DELETE | /api/users/:id | 삭제 | JWT+Admin |
 | GET | /api/files | 파일 목록 | JWT |
 | POST | /api/files/upload | 파일 업로드 | JWT |
@@ -87,6 +91,8 @@ sensor_status   - 센서 현재 상태
 alarm_events    - 알람 발생 이력
 users           - 사용자 정보
 files           - 업로드 파일 정보
+sites 테이블에 managers 컬럼 추가 (담당자 목록)
+users 테이블에 phone 컬럼 추가 (핸드폰번호)
 ```
 
 ## 🤖 에이전트
