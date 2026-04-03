@@ -468,6 +468,18 @@ app.get('/api/sites', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.post('/api/sites', async (req, res) => {
+  const { name, location, description, managers } = req.body
+  if (!name) return res.status(400).json({ error: '현장명 필수' })
+  try {
+    const site_code = 'site-' + Date.now()
+    const { rows } = await pool.query(
+      `INSERT INTO sites (site_code, name, location, description, managers) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [site_code, name, location || '', description || '', JSON.stringify(managers || [])])
+    res.status(201).json({ success: true, site: rows[0] })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.patch('/api/sites/:id', async (req, res) => {
   const { name, location, description, managers } = req.body
   try {
