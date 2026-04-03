@@ -478,6 +478,16 @@ app.patch('/api/sites/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.patch('/api/sensors/:id/site', async (req, res) => {
+  const { site_code } = req.body
+  try {
+    const site = await pool.query(`SELECT id FROM sites WHERE site_code=$1`, [site_code])
+    if (site.rows.length === 0) return res.status(404).json({ error: '현장을 찾을 수 없습니다' })
+    await pool.query(`UPDATE sensors SET site_id=$1 WHERE id=$2`, [site.rows[0].id, req.params.id])
+    res.json({ success: true, message: '센서 소속 현장 변경 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.get('/api/sensors', async (req, res) => {
   const { status } = req.query
   try {
