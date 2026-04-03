@@ -493,6 +493,11 @@ app.patch('/api/sites/:id', async (req, res) => {
 app.patch('/api/sensors/:id/site', async (req, res) => {
   const { site_code } = req.body
   try {
+    if (!site_code) {
+      // site_code가 없으면 미배정 처리
+      await pool.query(`UPDATE sensors SET site_id=NULL WHERE id=$1`, [req.params.id])
+      return res.json({ success: true, message: '센서 미배정 처리 완료' })
+    }
     const site = await pool.query(`SELECT id FROM sites WHERE site_code=$1`, [site_code])
     if (site.rows.length === 0) return res.status(404).json({ error: '현장을 찾을 수 없습니다' })
     await pool.query(`UPDATE sensors SET site_id=$1 WHERE id=$2`, [site.rows[0].id, req.params.id])
