@@ -30,6 +30,7 @@ const swaggerOptions = {
       { name: '센서', description: '센서 조회 및 측정값' },
       { name: '알람', description: '알람 조회 및 처리' },
       { name: '대시보드', description: '대시보드 요약' },
+      { name: '현장', description: '현장 추가 / 수정' },
       { name: '사용자', description: '사용자 관리' },
       { name: '파일', description: '파일 업로드 / 다운로드' },
       { name: '시스템', description: '헬스체크' },
@@ -190,6 +191,95 @@ const swaggerOptions = {
           responses: { 200: { description: '수신 성공' } }
         }
       }
+      '/api/sites': {
+        get: {
+          tags: ['현장'],
+          summary: '현장 목록 조회',
+          responses: { 200: { description: '현장 목록' } }
+        },
+        post: {
+          tags: ['현장'],
+          summary: '현장 추가',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              name: { type: 'string', example: '현장 A' },
+              location: { type: 'string', example: '서울특별시 마포구' },
+              description: { type: 'string', example: '현장 설명' },
+              managers: { type: 'array', items: { type: 'string' } }
+            }, required: ['name'] } } }
+          },
+          responses: { 201: { description: '현장 추가 성공' } }
+        }
+      },
+      '/api/sites/{id}': {
+        patch: {
+          tags: ['현장'],
+          summary: '현장 수정 (담당자 포함)',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          requestBody: {
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              name: { type: 'string' },
+              location: { type: 'string' },
+              description: { type: 'string' },
+              managers: { type: 'array', items: { type: 'string' } }
+            } } } }
+          },
+          responses: { 200: { description: '수정 완료' } }
+        }
+      },
+      '/api/sensors/{id}/threshold': {
+        patch: {
+          tags: ['센서'],
+          summary: '센서 임계값 수정',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          requestBody: {
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              threshold_normal_max: { type: 'number', example: -21.5 },
+              threshold_warning_max: { type: 'number', example: -21.0 },
+              threshold_danger_min: { type: 'number', example: -20.5 }
+            } } } }
+          },
+          responses: { 200: { description: '임계값 수정 완료' } }
+        }
+      },
+      '/api/sensors/{id}/site': {
+        patch: {
+          tags: ['센서'],
+          summary: '센서 소속 현장 변경/미배정',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          requestBody: {
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              site_code: { type: 'string', example: 'site-main', description: '빈 문자열이면 미배정 처리' }
+            } } } }
+          },
+          responses: { 200: { description: '현장 변경 완료' } }
+        }
+      },
+      '/api/users/list': {
+        get: {
+          tags: ['사용자'],
+          summary: '사용자 목록 조회 (인증 없음)',
+          responses: { 200: { description: '활성 사용자 목록' } }
+        }
+      },
+      '/api/users/{id}/edit': {
+        patch: {
+          tags: ['사용자'],
+          summary: '사용자 정보 수정 (admin)',
+          security: [{ bearerAuth: [] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          requestBody: {
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              username: { type: 'string' },
+              email: { type: 'string' },
+              role: { type: 'string' },
+              phone: { type: 'string' }
+            } } } }
+          },
+          responses: { 200: { description: '수정 완료' } }
+        }
+      },
     }
   },
   apis: [],
