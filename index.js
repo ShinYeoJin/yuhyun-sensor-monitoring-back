@@ -612,6 +612,18 @@ app.patch('/api/sites/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (r
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.delete('/api/sites/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM sites WHERE id=$1`, [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: '현장을 찾을 수 없습니다.' })
+    // 해당 현장 소속 센서들 미배정 처리
+    await pool.query(`UPDATE sensors SET site_id=NULL WHERE site_id=$1`, [req.params.id])
+    await pool.query(`DELETE FROM sites WHERE id=$1`, [req.params.id])
+    res.json({ success: true, message: '현장이 삭제되었습니다.' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+
 app.patch('/api/sensors/:id/site', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { site_code } = req.body
   try {
