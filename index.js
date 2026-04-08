@@ -328,10 +328,15 @@ function requireAuth(req, res, next) {
   }
 }
 
-function requireAdmin(req, res, next) {
-  if (req.user.role !== 'admin')
-    return res.status(403).json({ error: 'Admin only' })
-  next()
+const NON_MULTIMONITOR = ['admin', 'Administrator', 'Manager', 'Operator', 'Monitor']
+
+function requireRole(allowedRoles) {
+  return (req, res, next) => {
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: '접근 권한이 없습니다.' })
+    }
+    next()
+  }
 }
 
 function evalStatus(value, sensor) {
@@ -356,7 +361,7 @@ async function maybeCreateAlarm(client, sensor, status, value) {
       value, threshVal])
 }
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { username, email, password, role = 'user', phone = '' } = req.body
   if (!username || !email || !password)
     return res.status(400).json({ error: 'username, email, password 필수' })
@@ -405,7 +410,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
+app.get('/api/users', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, username, email, role, phone, is_active, is_deleted, created_at, last_login FROM users ORDER BY created_at DESC`)
@@ -413,7 +418,7 @@ app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.get('/api/users/active', requireAuth, requireAdmin, async (req, res) => {
+app.get('/api/users/active', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, username, email, role, is_active, created_at, last_login FROM users WHERE is_active=true AND is_deleted=false ORDER BY created_at DESC`)
@@ -429,7 +434,7 @@ app.get('/api/users/list', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
+app.patch('/api/users/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { username, email, role } = req.body
   try {
     await pool.query(
@@ -439,28 +444,28 @@ app.patch('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/users/:id/deactivate', requireAuth, requireAdmin, async (req, res) => {
+app.patch('/api/users/:id/deactivate', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   try {
     await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [req.params.id])
     res.json({ success: true, message: '사용자 비활성화 완료' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/users/:id/activate', requireAuth, requireAdmin, async (req, res) => {
+app.patch('/api/users/:id/activate', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   try {
     await pool.query(`UPDATE users SET is_active=true WHERE id=$1`, [req.params.id])
     res.json({ success: true, message: '사용자 활성화 완료' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
+app.delete('/api/users/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   try {
     await pool.query(`UPDATE users SET is_deleted=true, is_active=false WHERE id=$1`, [req.params.id])
     res.json({ success: true, message: '사용자 삭제 완료' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/users/:id/edit', requireAuth, requireAdmin, async (req, res) => {
+app.patch('/api/users/:id/edit', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { username, email, role, phone = '' } = req.body
   try {
     await pool.query(
@@ -471,6 +476,24 @@ app.patch('/api/users/:id/edit', requireAuth, requireAdmin, async (req, res) => 
     if (err.code === '23505') return res.status(400).json({ error: '이미 존재하는 username 또는 email' })
     res.status(500).json({ error: err.message })
   }
+})
+
+app.patch('/api/users/:id/password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ error: '현재 비밀번호와 새 비밀번호를 입력해주세요.' })
+  // 본인 비밀번호만 변경 가능
+  if (String(req.user.id) !== String(req.params.id))
+    return res.status(403).json({ error: '본인 비밀번호만 변경할 수 있습니다.' })
+  try {
+    const { rows } = await pool.query(`SELECT * FROM users WHERE id=$1`, [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' })
+    const valid = await bcrypt.compare(currentPassword, rows[0].password_hash)
+    if (!valid) return res.status(401).json({ error: '현재 비밀번호가 올바르지 않습니다.' })
+    const hash = await bcrypt.hash(newPassword, 10)
+    await pool.query(`UPDATE users SET password_hash=$1 WHERE id=$2`, [hash, req.params.id])
+    res.json({ success: true, message: '비밀번호가 변경되었습니다.' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 app.post('/api/files/upload', requireAuth, upload.single('file'), async (req, res) => {
@@ -567,7 +590,7 @@ app.get('/api/sites', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.post('/api/sites', async (req, res) => {
+app.post('/api/sites', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { name, location, description, managers } = req.body
   if (!name) return res.status(400).json({ error: '현장명 필수' })
   try {
@@ -579,7 +602,7 @@ app.post('/api/sites', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/sites/:id', async (req, res) => {
+app.patch('/api/sites/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { name, location, description, managers } = req.body
   try {
     await pool.query(
@@ -589,7 +612,7 @@ app.patch('/api/sites/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/sensors/:id/site', async (req, res) => {
+app.patch('/api/sensors/:id/site', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { site_code } = req.body
   try {
     if (!site_code) {
@@ -635,7 +658,7 @@ app.get('/api/sensors/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/sensors/:id/threshold', async (req, res) => {
+app.patch('/api/sensors/:id/threshold', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { threshold_normal_max, threshold_warning_max, threshold_danger_min } = req.body
   try {
     await pool.query(
@@ -700,7 +723,7 @@ app.get('/api/alarms', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-app.patch('/api/alarms/:id/acknowledge', async (req, res) => {
+app.patch('/api/alarms/:id/acknowledge', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { acknowledgedBy = '관리자' } = req.body
   try {
     await pool.query(
