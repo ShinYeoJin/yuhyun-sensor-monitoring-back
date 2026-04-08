@@ -777,4 +777,10 @@ app.get('/api/health', async (req, res) => {
 })
 
 const PORT = process.env.PORT || 4000
+app.get('/api/fix-admin', async (req, res) => {
+  try {
+    await pool.query(`UPDATE users SET role='admin' WHERE email='admin@geomonitor.com'`)
+    res.json({ success: true, message: 'admin 권한 복구 완료' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
 app.listen(PORT, () => console.log(`GeoMonitor API listening on port ${PORT}`))
