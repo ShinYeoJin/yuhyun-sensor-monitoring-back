@@ -519,8 +519,17 @@ app.post('/api/ingest', requireKey, async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    const { rows } = await client.query('SELECT * FROM sensors WHERE sensor_code=$1 AND is_active=true', [sensorCode])
-    if (rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: `Sensor not found: ${sensorCode}` }) }
+    let { rows } = await client.query('SELECT * FROM sensors WHERE sensor_code=$1 AND is_active=true', [sensorCode])
+    if (rows.length === 0) {
+      // 새 센서 자동 등록
+      console.log(`[자동 등록] 새 센서 감지: ${sensorCode}`)
+      const manageNo = 'MN-AUTO-' + sensorCode
+      const newSensor = await client.query(
+        `INSERT INTO sensors (sensor_code, name, manage_no, unit, sensor_type, is_active)
+        VALUES ($1,$2,$3,$4,$5,true) RETURNING *`,
+        [sensorCode, sensorCode, manageNo, '-', 'unknown'])
+      rows = newSensor.rows
+    }
     const sensor = rows[0]
     let inserted = 0
     for (const m of measurements) {
