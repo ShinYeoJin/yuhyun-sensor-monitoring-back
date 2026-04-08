@@ -54,28 +54,31 @@ PORT=4000
 
 | Method | Endpoint | 설명 | 인증 |
 |--------|----------|------|------|
-| POST | /api/auth/register | 회원가입 | - |
+| POST | /api/auth/register | 회원가입 | JWT + NonMultiMonitor |
 | POST | /api/auth/login | 로그인 | - |
 | POST | /api/auth/logout | 로그아웃 | JWT |
-| POST | /api/sites | 현장 추가 | - |
 | GET | /api/auth/me | 내 정보 | JWT |
 | GET | /api/sensors | 센서 목록 | - |
 | GET | /api/sensors/:id | 센서 상세 | - |
 | GET | /api/sensors/:id/measurements | 측정값 | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
-| GET | /api/users/list | 사용자 목록 (인증 없음) | - |
-| PATCH | /api/sensors/:id/threshold | 임계값 수정 | - |
+| PATCH | /api/sensors/:id/threshold | 임계값 수정 | JWT + NonMultiMonitor |
+| PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
 | POST | /api/ingest | 센서 데이터 수신 | API Key |
 | GET | /api/alarms | 알람 목록 | - |
-| PATCH | /api/alarms/:id/acknowledge | 알람 확인 | - |
+| PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
 | GET | /api/dashboard | 대시보드 요약 | - |
-| GET | /api/users | 사용자 목록 | JWT+Admin |
-| PATCH | /api/users/:id/edit | 사용자 수정 | JWT+Admin |
-| PATCH | /api/users/:id/deactivate | 비활성화 | JWT+Admin |
-| PATCH | /api/users/:id/activate | 활성화 | JWT+Admin |
-| PATCH | /api/sites/:id | 현장 수정 (담당자 포함) | - |
-| PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | - |
-| DELETE | /api/users/:id | 삭제 | JWT+Admin |
+| GET | /api/sites | 현장 목록 | - |
+| POST | /api/sites | 현장 추가 | JWT + NonMultiMonitor |
+| PATCH | /api/sites/:id | 현장 수정 | JWT + NonMultiMonitor |
+| DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
+| GET | /api/users | 사용자 목록 | JWT + NonMultiMonitor |
+| GET | /api/users/list | 사용자 목록 (인증 없음) | - |
+| PATCH | /api/users/:id/edit | 사용자 수정 | JWT + NonMultiMonitor |
+| PATCH | /api/users/:id/password | 비밀번호 변경 | JWT (본인만) |
+| PATCH | /api/users/:id/deactivate | 비활성화 | JWT + NonMultiMonitor |
+| PATCH | /api/users/:id/activate | 활성화 | JWT + NonMultiMonitor |
+| DELETE | /api/users/:id | 삭제 | JWT + NonMultiMonitor |
 | GET | /api/files | 파일 목록 | JWT |
 | POST | /api/files/upload | 파일 업로드 | JWT |
 | GET | /api/files/:id/download | 다운로드 | JWT |
@@ -115,3 +118,19 @@ pm2 save
 ## 📌 버전
 
 - **v1.0.0** (2026.04.03)
+
+## ⚠️ 주의사항
+
+### 권한 관리
+- **NonMultiMonitor**: `admin`, `Administrator`, `Manager`, `Operator`, `Monitor` 역할을 가진 사용자
+- **MultiMonitor** 역할은 센서 조회 및 파일 관리만 가능하며, 편집/삭제/사용자 관리/알람 처리 불가
+- **본인 계정의 권한을 변경할 때는 반드시 다른 관리자 계정이 존재하는지 확인하세요.**
+- 시스템에 관리자 계정이 본인 하나뿐인 상태에서 자신의 권한을 `MultiMonitor`로 변경하면 사용자 관리 기능을 사용할 수 없게 됩니다.
+- 이 경우 UI에서 복구가 불가능하며 DB에 직접 접근하거나 별도 복구 작업이 필요합니다.
+- **최소 1개 이상의 관리자 계정을 항상 유지하는 것을 권장합니다.**
+
+### 파일 저장
+- Render 무료 플랜 특성상 서버 재시작 시 업로드된 파일이 삭제될 수 있습니다.
+
+### 데이터베이스
+- AWS RDS db.t3.micro 사용 중 (월 약 2~3만원 비용 발생)
