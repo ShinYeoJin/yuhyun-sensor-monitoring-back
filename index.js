@@ -557,7 +557,12 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     let inserted = 0
     for (const m of measurements) {
       const r = await client.query(
-        `INSERT INTO measurements (sensor_id, measured_at, value, depth_label, raw_file) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (sensor_id, measured_at, depth_label) DO NOTHING RETURNING id`,
+        `INSERT INTO measurements (sensor_id, measured_at, value, depth_label, raw_file)
+         SELECT $1,$2,$3,$4,$5
+         WHERE NOT EXISTS (
+           SELECT 1 FROM measurements
+           WHERE sensor_id=$1 AND measured_at=$2 AND COALESCE(depth_label,'') = COALESCE($4,'')
+         ) RETURNING id`,
         [sensor.id, m.measuredAt, m.value, m.depthLabel ?? null, rawFile ?? null])
       if (r.rowCount > 0) inserted++
     }
@@ -795,20 +800,6 @@ app.get('/api/health', async (req, res) => {
     const { rows } = await pool.query('SELECT NOW() AS now')
     res.json({ status: 'ok', db: 'connected', serverTime: rows[0].now })
   } catch { res.status(500).json({ status: 'error', db: 'disconnected' }) }
-})
-
-app.get('/api/fix-duplicates', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      DELETE FROM measurements
-      WHERE id NOT IN (
-        SELECT MIN(id)
-        FROM measurements
-        GROUP BY sensor_id, measured_at, COALESCE(depth_label, '')
-      )
-    `)
-    res.json({ success: true, deleted: result.rowCount })
-  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 const PORT = process.env.PORT || 4000
