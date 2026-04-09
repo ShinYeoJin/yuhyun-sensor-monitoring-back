@@ -361,8 +361,9 @@ async function maybeCreateAlarm(client, sensor, status, value) {
       value, threshVal])
 }
 
-app.post('/api/auth/register', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { username, email, password, role = 'user', phone = '' } = req.body
+app.post('/api/auth/register', async (req, res) => {
+  const { username, email, password, phone = '' } = req.body
+  const role = 'MultiMonitor'
   if (!username || !email || !password)
     return res.status(400).json({ error: 'username, email, password 필수' })
   try {
