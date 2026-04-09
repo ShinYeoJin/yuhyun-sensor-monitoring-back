@@ -797,5 +797,19 @@ app.get('/api/health', async (req, res) => {
   } catch { res.status(500).json({ status: 'error', db: 'disconnected' }) }
 })
 
+app.get('/api/fix-duplicates', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      DELETE FROM measurements
+      WHERE id NOT IN (
+        SELECT MIN(id)
+        FROM measurements
+        GROUP BY sensor_id, measured_at, COALESCE(depth_label, '')
+      )
+    `)
+    res.json({ success: true, deleted: result.rowCount })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 const PORT = process.env.PORT || 4000
 app.listen(PORT, () => console.log(`GeoMonitor API listening on port ${PORT}`))
