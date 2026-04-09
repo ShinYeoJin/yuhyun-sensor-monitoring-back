@@ -711,8 +711,8 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
   try {
     const params = [req.params.id]
     let where = 'WHERE m.sensor_id=$1'
-    if (from)       { params.push(from);       where += ` AND m.measured_at >= $${params.length}` }
-    if (to)         { params.push(to);         where += ` AND m.measured_at <= $${params.length}` }
+    if (from) { params.push(from + 'T00:00:00+09:00'); where += ` AND m.measured_at >= $${params.length}` }
+    if (to)   { params.push(to   + 'T23:59:59+09:00'); where += ` AND m.measured_at <= $${params.length}` }
     if (depthLabel) {
       params.push(depthLabel)
       where += ` AND m.depth_label = $${params.length}`
