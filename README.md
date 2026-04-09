@@ -54,7 +54,7 @@ PORT=4000
 
 | Method | Endpoint | 설명 | 인증 |
 |--------|----------|------|------|
-| POST | /api/auth/register | 회원가입 | JWT + NonMultiMonitor |
+| POST | /api/auth/register | 회원가입 | - (기본 role: MultiMonitor 자동 설정) |
 | POST | /api/auth/login | 로그인 | - |
 | POST | /api/auth/logout | 로그아웃 | JWT |
 | GET | /api/auth/me | 내 정보 | JWT |
@@ -143,3 +143,8 @@ pm2 save
 
 ### 데이터베이스
 - AWS RDS db.t3.micro 사용 중 (월 약 2~3만원 비용 발생)
+
+### DB 비밀번호 자동 교체
+- AWS Secrets Manager가 RDS 비밀번호를 자동 교체할 수 있음
+- 자동 교체 비활성화 완료 (2026.04.09)
+- 만약 DB 연결 오류 발생 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트 필요
