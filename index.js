@@ -670,6 +670,27 @@ app.get('/api/sensors/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
+  const { name, manage_no, sensor_type, unit, field } = req.body
+  try {
+    const fields = []
+    const values = []
+    let idx = 1
+    if (name !== undefined)        { fields.push(`name=$${idx++}`);        values.push(name) }
+    if (manage_no !== undefined)   { fields.push(`manage_no=$${idx++}`);   values.push(manage_no) }
+    if (sensor_type !== undefined) { fields.push(`sensor_type=$${idx++}`); values.push(sensor_type) }
+    if (unit !== undefined)        { fields.push(`unit=$${idx++}`);        values.push(unit) }
+    if (field !== undefined)       { fields.push(`field=$${idx++}`);       values.push(field) }
+    if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' })
+    values.push(req.params.id)
+    const { rows } = await pool.query(
+      `UPDATE sensors SET ${fields.join(', ')} WHERE id=$${idx} RETURNING *`,
+      values)
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' })
+    res.json({ success: true, message: '센서 정보 수정 완료', sensor: rows[0] })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.patch('/api/sensors/:id/threshold', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { threshold_normal_max, threshold_warning_max, threshold_danger_min } = req.body
   try {
