@@ -559,11 +559,9 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     for (const m of measurements) {
       const r = await client.query(
         `INSERT INTO measurements (sensor_id, measured_at, value, depth_label, raw_file)
-         SELECT $1,$2,$3,$4,$5
-         WHERE NOT EXISTS (
-           SELECT 1 FROM measurements
-           WHERE sensor_id=$1 AND measured_at=$2 AND COALESCE(depth_label,'') = COALESCE($4::text,'')
-         ) RETURNING id`,
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT ON CONSTRAINT uq_meas_sensor_time_depth DO NOTHING
+         RETURNING id`,
         [sensor.id, m.measuredAt, m.value, m.depthLabel ?? null, rawFile ?? null])
       if (r.rowCount > 0) inserted++
     }
