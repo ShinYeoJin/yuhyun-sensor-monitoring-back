@@ -686,7 +686,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
     if (manage_no !== undefined)          { fields.push(`manage_no=$${idx++}`);          values.push(manage_no) }
     if (sensor_type !== undefined)        { fields.push(`sensor_type=$${idx++}`);        values.push(sensor_type) }
     if (unit !== undefined)               { fields.push(`unit=$${idx++}`);               values.push(unit) }
-    if (field !== undefined)              { fields.push(`field=$${idx++}`); 
+    if (field !== undefined)              { fields.push(`field=$${idx++}`);              values.push(field) }
     if (formula !== undefined)            { fields.push(`formula=$${idx++}`);            values.push(formula) }
     if (level1_upper !== undefined)       { fields.push(`level1_upper=$${idx++}`);       values.push(level1_upper) }
     if (level1_lower !== undefined)       { fields.push(`level1_lower=$${idx++}`);       values.push(level1_lower) }
