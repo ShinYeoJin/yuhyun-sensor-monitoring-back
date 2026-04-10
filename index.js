@@ -677,16 +677,24 @@ app.get('/api/sensors/:id', async (req, res) => {
 })
 
 app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, manage_no, sensor_type, unit, field } = req.body
+  const { name, manage_no, sensor_type, unit, field,
+    level1_upper, level1_lower, level2_upper, level2_lower,
+    criteria_unit, criteria_unit_name } = req.body
   try {
     const fields = []
     const values = []
     let idx = 1
-    if (name !== undefined)        { fields.push(`name=$${idx++}`);        values.push(name) }
-    if (manage_no !== undefined)   { fields.push(`manage_no=$${idx++}`);   values.push(manage_no) }
-    if (sensor_type !== undefined) { fields.push(`sensor_type=$${idx++}`); values.push(sensor_type) }
-    if (unit !== undefined)        { fields.push(`unit=$${idx++}`);        values.push(unit) }
-    if (field !== undefined)       { fields.push(`field=$${idx++}`);       values.push(field) }
+    if (name !== undefined)               { fields.push(`name=$${idx++}`);               values.push(name) }
+    if (manage_no !== undefined)          { fields.push(`manage_no=$${idx++}`);          values.push(manage_no) }
+    if (sensor_type !== undefined)        { fields.push(`sensor_type=$${idx++}`);        values.push(sensor_type) }
+    if (unit !== undefined)               { fields.push(`unit=$${idx++}`);               values.push(unit) }
+    if (field !== undefined)              { fields.push(`field=$${idx++}`);              values.push(field) }
+    if (level1_upper !== undefined)       { fields.push(`level1_upper=$${idx++}`);       values.push(level1_upper) }
+    if (level1_lower !== undefined)       { fields.push(`level1_lower=$${idx++}`);       values.push(level1_lower) }
+    if (level2_upper !== undefined)       { fields.push(`level2_upper=$${idx++}`);       values.push(level2_upper) }
+    if (level2_lower !== undefined)       { fields.push(`level2_lower=$${idx++}`);       values.push(level2_lower) }
+    if (criteria_unit !== undefined)      { fields.push(`criteria_unit=$${idx++}`);      values.push(criteria_unit) }
+    if (criteria_unit_name !== undefined) { fields.push(`criteria_unit_name=$${idx++}`); values.push(criteria_unit_name) }
     if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' })
     values.push(req.params.id)
     const { rows } = await pool.query(
