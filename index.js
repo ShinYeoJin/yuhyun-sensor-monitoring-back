@@ -562,7 +562,7 @@ app.post('/api/ingest', requireKey, async (req, res) => {
          SELECT $1,$2,$3,$4,$5
          WHERE NOT EXISTS (
            SELECT 1 FROM measurements
-           WHERE sensor_id=$1 AND measured_at=$2 AND COALESCE(depth_label,'') = COALESCE($4,'')
+           WHERE sensor_id=$1 AND measured_at=$2 AND COALESCE(depth_label,'') = COALESCE($4::text,'')
          ) RETURNING id`,
         [sensor.id, m.measuredAt, m.value, m.depthLabel ?? null, rawFile ?? null])
       if (r.rowCount > 0) inserted++
