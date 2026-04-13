@@ -62,6 +62,16 @@ PORT=4000
 | GET | /api/sensors/:id | 센서 상세 | - |
 | GET | /api/sensors/:id/measurements | 측정값 | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
+| GET |    /api/formulas        | 계산식 목록 조회 |
+| POST |   /api/formulas        | 계산식 추가 (관리자) |
+| PATCH |  /api/formulas/:id    | 계산식 수정 (관리자) |
+| DELETE | /api/formulas/:id    | 계산식 삭제 (관리자) |
+| GET | /api/sensors | 80053 sensor_code일 경우 current_value를 계산값으로 변환 |
+| GET | /api/sensors/:id | 동일 |
+| GET | /api/sensors/:id/measurements | 전체 측정값 계산식 적용 후 반환 |
+계산식: P(m) = G × (첫측정값 - 현재값) × 0.703
+- depth_label "1": G = 0.012044
+- depth_label "2", "3": G = 0.013450
 | PATCH | /api/sensors/:id/threshold | 임계값 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
 | POST | /api/ingest | 센서 데이터 수신 | API Key |
@@ -89,6 +99,14 @@ PORT=4000
 ```
 sites           - 현장 정보
 sensors         - 센서 정보 (임계값 포함)
+sensors 테이블:
+- formula VARCHAR(100) DEFAULT '(A*X+B)'
+- install_date (기존)
+- location_desc (기존)
+- level1_upper, level1_lower, level2_upper, level2_lower
+- criteria_unit, criteria_unit_name
+formulas 테이블 (신규):
+- id, name, expression, description, is_active, created_at
 measurements    - 측정값 누적 데이터
 sensor_status   - 센서 현재 상태
 alarm_events    - 알람 발생 이력
