@@ -62,10 +62,12 @@ PORT=4000
 | GET | /api/sensors/:id | 센서 상세 | - |
 | GET | /api/sensors/:id/measurements | 측정값 | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
-| GET |    /api/formulas        | 계산식 목록 조회 |
-| POST |   /api/formulas        | 계산식 추가 (관리자) |
-| PATCH |  /api/formulas/:id    | 계산식 수정 (관리자) |
-| DELETE | /api/formulas/:id    | 계산식 삭제 (관리자) |
+PATCH  /api/users/:id/password    비밀번호 변경 (JWT, 본인만)
+DELETE /api/sites/:id             현장 삭제 (JWT + NonMultiMonitor)
+| GET |    /api/formulas             | 계산식 목록 조회 |
+| POST |   /api/formulas             | 계산식 추가 (JWT + NonMultiMonitor) |
+| PATCH |  /api/formulas/:id         | 계산식 수정 (JWT + NonMultiMonitor) |
+| DELETE | /api/formulas/:id         | 계산식 삭제 (JWT + NonMultiMonitor) |
 | GET | /api/sensors | 80053 sensor_code일 경우 current_value를 계산값으로 변환 |
 | GET | /api/sensors/:id | 동일 |
 | GET | /api/sensors/:id/measurements | 전체 측정값 계산식 적용 후 반환 |
@@ -99,14 +101,11 @@ PORT=4000
 ```
 sites           - 현장 정보
 sensors         - 센서 정보 (임계값 포함)
-sensors 테이블:
-- formula VARCHAR(100) DEFAULT '(A*X+B)'
-- install_date (기존)
-- location_desc (기존)
-- level1_upper, level1_lower, level2_upper, level2_lower
-- criteria_unit, criteria_unit_name
-formulas 테이블 (신규):
-- id, name, expression, description, is_active, created_at
+formulas        - 계산식 목록 (신규)
+sensors         - formula, level1_upper, level1_lower, 
+                  level2_upper, level2_lower, criteria_unit, 
+                  criteria_unit_name 컬럼 추가
+users 테이블에 phone 컬럼 추가
 measurements    - 측정값 누적 데이터
 sensor_status   - 센서 현재 상태
 alarm_events    - 알람 발생 이력
@@ -126,7 +125,12 @@ C:\geomonitor-agent\
 └── .env
 ```
 
-**에이전트 실행 (pm2):**
+**에이전트 자동 실행(pm2)_26.04.08**
+- Windows 작업 스케줄러로 PC 로그인 시 pm2 자동 실행 설정 완료 (2026.04.09)
+- PC 재시작 후 별도 터미널 명령어 입력 불필요
+- pm2 status 명령어로 실행 상태 확인 가능
+
+**에이전트 실행 (pm2)_26.04.02:**
 ```powershell
 cd C:\geomonitor-agent
 pm2 start agent.js --name geomonitor-agent
@@ -141,6 +145,15 @@ pm2 save
   - 단위: `-`
 - 이후 관리자가 센서 관리 → 센서 정의 탭 → 편집 버튼에서 수동으로 정보 수정 필요
 - **새 센서 감지 후 반드시 관리번호/센서 종류/단위/임계값을 수정해야 정상 모니터링 가능**
+
+### 80053 센서 계산식
+GET /api/sensors, GET /api/sensors/:id, 
+GET /api/sensors/:id/measurements 에서
+80053 센서의 경우 raw 데이터를 계산식 적용 후 반환
+
+계산식: P(m) = G × (첫측정값 - 현재값) × 0.703
+- depth_label "1": G = 0.012044
+- depth_label "2", "3": G = 0.013450
 
 ## 📌 버전
 
