@@ -342,8 +342,8 @@ function requireRole(allowedRoles) {
 function evalStatus(value, sensor) {
   const dMin = sensor.threshold_danger_min
   const nMax = sensor.threshold_normal_max
-  if (dMin !== null && value >= Number(dMin)) return 'danger'
-  if (nMax !== null && value >  Number(nMax)) return 'warning'
+  if (dMin !== null && dMin !== '' && value >= Number(dMin)) return 'danger'
+  if (nMax !== null && nMax !== '' && value > Number(nMax)) return 'warning'
   return 'normal'
 }
 
