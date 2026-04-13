@@ -678,7 +678,7 @@ app.get('/api/sensors/:id', async (req, res) => {
 app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   const { name, manage_no, sensor_type, unit, field, formula,
     level1_upper, level1_lower, level2_upper, level2_lower,
-    criteria_unit, criteria_unit_name } = req.body
+    criteria_unit, criteria_unit_name, install_date, location_desc } = req.body
   try {
     const fields = []
     const values = []
@@ -696,6 +696,8 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
     if (criteria_unit !== undefined)      { fields.push(`criteria_unit=$${idx++}`);      values.push(criteria_unit) }
     if (criteria_unit_name !== undefined) { fields.push(`criteria_unit_name=$${idx++}`); values.push(criteria_unit_name) }
     if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' })
+    if (install_date !== undefined)       { fields.push(`install_date=$${idx++}`);       values.push(install_date) }
+    if (location_desc !== undefined)      { fields.push(`location_desc=$${idx++}`);      values.push(location_desc) }  
     values.push(req.params.id)
     const { rows } = await pool.query(
       `UPDATE sensors SET ${fields.join(', ')} WHERE id=$${idx} RETURNING *`,
