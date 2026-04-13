@@ -652,26 +652,64 @@ app.get('/api/sensors', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT s.id, s.sensor_code, s.manage_no, s.name, s.sensor_type, s.unit, s.field,
              s.location_desc, s.install_date, s.threshold_normal_max, s.threshold_warning_max, s.threshold_danger_min,
-             ss.current_value, ss.status, ss.last_measured, si.name AS site_name, si.site_code
+             ss.current_value, ss.status, ss.last_measured, si.name AS site_name, si.site_code,
+             s.level1_upper, s.level1_lower, s.level2_upper, s.level2_lower,
+             s.criteria_unit, s.criteria_unit_name, s.formula
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
       ${where} ORDER BY s.id`, params)
-    res.json(rows)
+
+    // 80053 계산식 적용
+    const result = await Promise.all(rows.map(async (s) => {
+      if (s.sensor_code === '80053' && s.current_value !== null) {
+        const initRow = await pool.query(
+          `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label='1' ORDER BY measured_at ASC LIMIT 1`,
+          [s.id])
+        if (initRow.rows.length > 0) {
+          const initRaw = parseFloat(initRow.rows[0].value)
+          const raw = parseFloat(s.current_value)
+          const G = 0.012044
+          const psi = G * (initRaw - raw)
+          const m = parseFloat((psi * 0.703).toFixed(4))
+          return { ...s, current_value: m }
+        }
+      }
+      return s
+    }))
+
+    res.json(result)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 app.get('/api/sensors/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT s.*, ss.current_value, ss.status, ss.last_measured, 
-       si.name AS site_name, si.site_code, si.managers AS site_managers
+      SELECT s.*, ss.current_value, ss.status, ss.last_measured,
+             si.name AS site_name, si.site_code, si.managers AS site_managers
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
       WHERE s.id = $1`, [req.params.id])
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' })
-    res.json(rows[0])
+
+    const sensor = rows[0]
+
+    // 80053 계산식 적용
+    if (sensor.sensor_code === '80053' && sensor.current_value !== null) {
+      const initRow = await pool.query(
+        `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label='1' ORDER BY measured_at ASC LIMIT 1`,
+        [sensor.id])
+      if (initRow.rows.length > 0) {
+        const initRaw = parseFloat(initRow.rows[0].value)
+        const raw = parseFloat(sensor.current_value)
+        const G = 0.012044
+        const psi = G * (initRaw - raw)
+        sensor.current_value = parseFloat((psi * 0.703).toFixed(4))
+      }
+    }
+
+    res.json(sensor)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -724,27 +762,58 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
     let where = 'WHERE m.sensor_id=$1'
     if (from) { params.push(from + 'T00:00:00+09:00'); where += ` AND m.measured_at >= $${params.length}` }
     if (to)   { params.push(to   + 'T23:59:59+09:00'); where += ` AND m.measured_at <= $${params.length}` }
+
+    // 80053 센서 확인
+    const sensorCheck = await pool.query(
+      `SELECT sensor_code FROM sensors WHERE id=$1`, [req.params.id])
+    const is80053 = sensorCheck.rows.length > 0 && sensorCheck.rows[0].sensor_code === '80053'
+
     if (depthLabel) {
       params.push(depthLabel)
       where += ` AND m.depth_label = $${params.length}`
     } else {
-      // depth_label이 없으면 NULL 우선, 없으면 첫 번째 depth_label 사용
       const depthCheck = await pool.query(
         `SELECT depth_label FROM measurements WHERE sensor_id=$1 AND depth_label IS NULL LIMIT 1`, [req.params.id])
       if (depthCheck.rows.length > 0) {
         where += ' AND m.depth_label IS NULL'
       } else {
-        const firstDepth = await pool.query(
-          `SELECT depth_label FROM measurements WHERE sensor_id=$1 AND depth_label IS NOT NULL ORDER BY depth_label LIMIT 1`, [req.params.id])
-        if (firstDepth.rows.length > 0) {
-          params.push(firstDepth.rows[0].depth_label)
+        // 80053은 depth_label '1' 기준
+        const defaultDepth = is80053 ? '1' : null
+        if (defaultDepth) {
+          params.push(defaultDepth)
           where += ` AND m.depth_label = $${params.length}`
+        } else {
+          const firstDepth = await pool.query(
+            `SELECT depth_label FROM measurements WHERE sensor_id=$1 AND depth_label IS NOT NULL ORDER BY depth_label LIMIT 1`, [req.params.id])
+          if (firstDepth.rows.length > 0) {
+            params.push(firstDepth.rows[0].depth_label)
+            where += ` AND m.depth_label = $${params.length}`
+          }
         }
       }
     }
+
     params.push(Number(limit))
     const { rows } = await pool.query(
       `SELECT m.measured_at, m.value, m.depth_label FROM measurements m ${where} ORDER BY m.measured_at ASC LIMIT $${params.length}`, params)
+
+    // 80053 계산식 적용
+    if (is80053 && rows.length > 0) {
+      const initRaw = parseFloat(rows[0].value)
+      const converted = rows.map(r => {
+        const raw = parseFloat(r.value)
+        const G = r.depth_label === '1' ? 0.012044 : 0.013450
+        const psi = G * (initRaw - raw)
+        const m = psi * 0.703
+        return {
+          ...r,
+          value: parseFloat(m.toFixed(4)),
+          raw_value: raw,
+        }
+      })
+      return res.json(converted)
+    }
+
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
