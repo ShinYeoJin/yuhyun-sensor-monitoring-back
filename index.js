@@ -660,24 +660,21 @@ app.get('/api/sensors', async (req, res) => {
       LEFT JOIN sites si ON s.site_id = si.id
       ${where} ORDER BY s.id`, params)
 
-    // 80053 계산식 적용
     const result = await Promise.all(rows.map(async (s) => {
       if (s.sensor_code === '80053' && s.current_value !== null) {
         const initRow = await pool.query(
           `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label='1' ORDER BY measured_at ASC LIMIT 1`,
           [s.id])
         if (initRow.rows.length > 0) {
-          const initRaw = parseFloat(initRow.rows[0].value)
           const raw = parseFloat(s.current_value)
-          const G = 0.012044
-          const psi = G * (initRaw - raw)
-          const m = parseFloat((psi * 0.703).toFixed(4))
-          return { ...s, current_value: m }
+          // Polynomial (메인)
+          const A = 7.080e-8, B = -0.01296, C = 106.0458
+          const polyM = parseFloat(((A * raw * raw + B * raw + C) * 0.703).toFixed(4))
+          return { ...s, current_value: polyM }
         }
       }
       return s
     }))
-
     res.json(result)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -692,23 +689,14 @@ app.get('/api/sensors/:id', async (req, res) => {
       LEFT JOIN sites si ON s.site_id = si.id
       WHERE s.id = $1`, [req.params.id])
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' })
-
     const sensor = rows[0]
 
-    // 80053 계산식 적용
     if (sensor.sensor_code === '80053' && sensor.current_value !== null) {
-      const initRow = await pool.query(
-        `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label='1' ORDER BY measured_at ASC LIMIT 1`,
-        [sensor.id])
-      if (initRow.rows.length > 0) {
-        const initRaw = parseFloat(initRow.rows[0].value)
-        const raw = parseFloat(sensor.current_value)
-        const G = 0.012044
-        const psi = G * (initRaw - raw)
-        sensor.current_value = parseFloat((psi * 0.703).toFixed(4))
-      }
+      const raw = parseFloat(sensor.current_value)
+      // Polynomial (메인)
+      const A = 7.080e-8, B = -0.01296, C = 106.0458
+      sensor.current_value = parseFloat(((A * raw * raw + B * raw + C) * 0.703).toFixed(4))
     }
-
     res.json(sensor)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -763,7 +751,6 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
     if (from) { params.push(from + 'T00:00:00+09:00'); where += ` AND m.measured_at >= $${params.length}` }
     if (to)   { params.push(to   + 'T23:59:59+09:00'); where += ` AND m.measured_at <= $${params.length}` }
 
-    // 80053 센서 확인
     const sensorCheck = await pool.query(
       `SELECT sensor_code FROM sensors WHERE id=$1`, [req.params.id])
     const is80053 = sensorCheck.rows.length > 0 && sensorCheck.rows[0].sensor_code === '80053'
@@ -777,7 +764,7 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
       if (depthCheck.rows.length > 0) {
         where += ' AND m.depth_label IS NULL'
       } else {
-        // 80053은 depth_label '1' 기준
+        // 80053은 기본 depth_label '1'
         const defaultDepth = is80053 ? '1' : null
         if (defaultDepth) {
           params.push(defaultDepth)
@@ -797,17 +784,33 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT m.measured_at, m.value, m.depth_label FROM measurements m ${where} ORDER BY m.measured_at ASC LIMIT $${params.length}`, params)
 
-    // 80053 계산식 적용
+    // 80053 계산식 적용 (Polynomial 메인, Linear 서브 둘 다 반환)
     if (is80053 && rows.length > 0) {
       const initRaw = parseFloat(rows[0].value)
       const converted = rows.map(r => {
         const raw = parseFloat(r.value)
-        const G = r.depth_label === '1' ? 0.012044 : 0.013450
-        const psi = G * (initRaw - raw)
-        const m = psi * 0.703
+        const dl = r.depth_label
+
+        // Polynomial 계수
+        const A = dl === '1' ? 7.080e-8  : 1.429e-7
+        const B = dl === '1' ? -0.01296  : -0.01532
+        const C = dl === '1' ? 106.0458  : 118.4773
+
+        // Linear 계수
+        const G = dl === '1' ? 0.012044 : 0.013450
+
+        // Polynomial (메인) - K=0 (온도 보정 없음)
+        const polyPsi = A * raw * raw + B * raw + C
+        const polyM   = parseFloat((polyPsi * 0.703).toFixed(4))
+
+        // Linear (서브)
+        const linearPsi = G * (initRaw - raw)
+        const linearM   = parseFloat((linearPsi * 0.703).toFixed(4))
+
         return {
           ...r,
-          value: parseFloat(m.toFixed(4)),
+          value: polyM,        // 메인값 (Polynomial)
+          linear_value: linearM, // 서브값 (Linear)
           raw_value: raw,
         }
       })
