@@ -562,7 +562,7 @@ app.post('/api/ingest', requireKey, async (req, res) => {
          VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT ON CONSTRAINT uq_meas_sensor_time_depth DO NOTHING
          RETURNING id`,
-        [sensor.id, m.measuredAt, m.value, m.depthLabel ?? null, rawFile ?? null])
+        [sensor.id, m.measuredAt, m.value, m.depthLabel != null ? String(m.depthLabel) : null, rawFile ?? null])
       if (r.rowCount > 0) inserted++
     }
     if (sensor.sensor_type === 'water_level') {
