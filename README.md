@@ -22,7 +22,7 @@ GeoMonitor 백엔드는 지반 계측 센서 데이터를 수신·저장·제공
 - **암호화**: bcryptjs
 - **파일 업로드**: multer
 - **API 문서**: Swagger UI (swagger-ui-express)
-- **배포**: Render
+- **배포**: Render ($7/월)
 
 ## 📁 프로젝트 구조
 ```
@@ -54,29 +54,17 @@ PORT=4000
 
 | Method | Endpoint | 설명 | 인증 |
 |--------|----------|------|------|
-| POST | /api/auth/register | 회원가입 | - (기본 role: MultiMonitor 자동 설정) |
+| POST | /api/auth/register | 회원가입 (기본 role: MultiMonitor) | - |
 | POST | /api/auth/login | 로그인 | - |
 | POST | /api/auth/logout | 로그아웃 | JWT |
 | GET | /api/auth/me | 내 정보 | JWT |
 | GET | /api/sensors | 센서 목록 | - |
 | GET | /api/sensors/:id | 센서 상세 | - |
-| GET | /api/sensors/:id/measurements | 측정값 | - |
+| GET | /api/sensors/:id/measurements | 측정값 (depthLabel 파라미터 지원) | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
-PATCH  /api/users/:id/password    비밀번호 변경 (JWT, 본인만)
-DELETE /api/sites/:id             현장 삭제 (JWT + NonMultiMonitor)
-| GET |    /api/formulas             | 계산식 목록 조회 |
-| POST |   /api/formulas             | 계산식 추가 (JWT + NonMultiMonitor) |
-| PATCH |  /api/formulas/:id         | 계산식 수정 (JWT + NonMultiMonitor) |
-| DELETE | /api/formulas/:id         | 계산식 삭제 (JWT + NonMultiMonitor) |
-| GET | /api/sensors | 80053 sensor_code일 경우 current_value를 계산값으로 변환 |
-| GET | /api/sensors/:id | 동일 |
-| GET | /api/sensors/:id/measurements | 전체 측정값 계산식 적용 후 반환 |
-계산식: P(m) = G × (첫측정값 - 현재값) × 0.703
-- depth_label "1": G = 0.012044
-- depth_label "2", "3": G = 0.013450
 | PATCH | /api/sensors/:id/threshold | 임계값 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
-| POST | /api/ingest | 센서 데이터 수신 | API Key |
+| POST | /api/ingest | 센서 데이터 수신 (depthLabel 문자열 강제 변환) | API Key |
 | GET | /api/alarms | 알람 목록 | - |
 | PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
 | GET | /api/dashboard | 대시보드 요약 | - |
@@ -91,91 +79,119 @@ DELETE /api/sites/:id             현장 삭제 (JWT + NonMultiMonitor)
 | PATCH | /api/users/:id/deactivate | 비활성화 | JWT + NonMultiMonitor |
 | PATCH | /api/users/:id/activate | 활성화 | JWT + NonMultiMonitor |
 | DELETE | /api/users/:id | 삭제 | JWT + NonMultiMonitor |
+| GET | /api/formulas | 계산식 목록 | - |
+| POST | /api/formulas | 계산식 추가 | JWT + NonMultiMonitor |
+| PATCH | /api/formulas/:id | 계산식 수정 | JWT + NonMultiMonitor |
+| DELETE | /api/formulas/:id | 계산식 삭제 | JWT + NonMultiMonitor |
 | GET | /api/files | 파일 목록 | JWT |
 | POST | /api/files/upload | 파일 업로드 | JWT |
 | GET | /api/files/:id/download | 다운로드 | JWT |
 | DELETE | /api/files/:id | 파일 삭제 | JWT |
+| POST | /api/recollect | 재수집 요청 등록 | JWT + NonMultiMonitor |
+| GET | /api/recollect | 재수집 요청 목록 | JWT |
+| GET | /api/recollect/pending | 처리 대기 요청 조회 (에이전트용) | API Key |
+| PATCH | /api/recollect/:id/done | 재수집 완료 처리 (에이전트용) | API Key |
+| DELETE | /api/recollect/:id | 재수집 요청 취소 | JWT |
+| POST | /api/agent/heartbeat | 에이전트 온라인 상태 보고 | API Key |
+| GET | /api/agent/status | 에이전트 상태 조회 | - |
 | GET | /api/health | 헬스체크 | - |
 
 ## 🗄 데이터베이스 구조
 ```
-sites           - 현장 정보
-sensors         - 센서 정보 (임계값 포함)
-formulas        - 계산식 목록 (신규)
-sensors         - formula, level1_upper, level1_lower, 
-                  level2_upper, level2_lower, criteria_unit, 
-                  criteria_unit_name 컬럼 추가
-users 테이블에 phone 컬럼 추가
-measurements    - 측정값 누적 데이터
-sensor_status   - 센서 현재 상태
-alarm_events    - 알람 발생 이력
-users           - 사용자 정보
-files           - 업로드 파일 정보
-sites 테이블에 managers 컬럼 추가 (담당자 목록)
-users 테이블에 phone 컬럼 추가 (핸드폰번호)
+sites               - 현장 정보 (managers 컬럼 포함)
+sensors             - 센서 정보 (임계값, formula, level1_upper, level1_lower,
+                      level2_upper, level2_lower, criteria_unit, criteria_unit_name 포함)
+formulas            - 계산식 목록
+measurements        - 측정값 누적 데이터
+                      (value: Polynomial 계산값, linear_value: Linear 계산값, raw_value: 원시값)
+sensor_status       - 센서 현재 상태
+alarm_events        - 알람 발생 이력
+users               - 사용자 정보 (phone 컬럼 포함)
+files               - 업로드 파일 정보
+recollect_requests  - 재수집 요청 이력 (최초 호출 시 자동 생성)
+agent_status        - 에이전트 상태 (최초 호출 시 자동 생성)
 ```
 
-## 🤖 에이전트
+## 🤖 에이전트 v2.1
 
 현장 PC(Windows)에 설치된 Node.js 에이전트가 1시간마다 센서 txt 파일을 읽어 API로 전송합니다.
+
 ```
 C:\geomonitor-agent\
-├── agent.js      # 에이전트 메인 파일
+├── agent.js          # 에이전트 메인 파일 (v2.1)
 ├── package.json
-└── .env
+├── .env
+├── .last_sent.json   # 마지막 전송 시간 추적
+└── .known_folders.json # 알려진 센서 폴더 목록
 ```
 
-**에이전트 자동 실행(pm2)_26.04.08**
-- Windows 작업 스케줄러로 PC 로그인 시 pm2 자동 실행 설정 완료 (2026.04.09)
-- PC 재시작 후 별도 터미널 명령어 입력 불필요
-- pm2 status 명령어로 실행 상태 확인 가능
+### v2.1 추가 기능
+- **Heartbeat**: 5분마다 백엔드에 온라인 상태 전송 → 재수집 탭에서 에이전트 온라인/오프라인 확인 가능
+- **재수집 폴링**: 매 실행마다 pending 재수집 요청 확인 후 처리
+  - 관리자가 웹에서 센서 + 날짜 선택 → 에이전트가 해당 날짜 이후 데이터 재전송
+  - 재수집은 파일에 해당 날짜 데이터가 존재해야 가능
 
-**에이전트 실행 (pm2)_26.04.02:**
+### 에이전트 실행 (pm2)
 ```powershell
 cd C:\geomonitor-agent
 pm2 start agent.js --name geomonitor-agent
 pm2 save
+pm2 logs geomonitor-agent
 ```
 
+### Windows 자동 실행 설정
+- Windows 작업 스케줄러로 PC 로그인 시 pm2 자동 실행 설정 완료 (2026.04.09)
+- PC 재시작 후 별도 터미널 명령어 입력 불필요
+- `pm2 status` 명령어로 실행 상태 확인 가능
+
 ### 새 센서 자동 감지 및 반자동 등록
-- 에이전트가 기존에 없던 새 센서 파일을 감지하면 자동으로 DB에 등록
-- 자동 등록 시 아래 임시값으로 저장됨
-  - 관리번호: `MN-AUTO-{센서코드}`
-  - 센서 종류: `unknown`
-  - 단위: `-`
+- 에이전트가 기존에 없던 새 센서 파일 감지 시 자동으로 DB 등록
+- 자동 등록 임시값: 관리번호 `MN-AUTO-{센서코드}`, 센서 종류 `unknown`, 단위 `-`
 - 이후 관리자가 센서 관리 → 센서 정의 탭 → 편집 버튼에서 수동으로 정보 수정 필요
-- **새 센서 감지 후 반드시 관리번호/센서 종류/단위/임계값을 수정해야 정상 모니터링 가능**
 
-### 80053 센서 계산식
-GET /api/sensors, GET /api/sensors/:id, 
-GET /api/sensors/:id/measurements 에서
-80053 센서의 경우 raw 데이터를 계산식 적용 후 반환
+## 🔢 80053 수위계 계산식
 
-계산식: P(m) = G × (첫측정값 - 현재값) × 0.703
-- depth_label "1": G = 0.012044
-- depth_label "2", "3": G = 0.013450
+`GET /api/sensors`, `GET /api/sensors/:id`, `GET /api/sensors/:id/measurements` 에서
+80053 센서의 경우 raw 데이터에 계산식 적용 후 반환
+
+### Polynomial (메인) — value 필드
+```
+P(psi) = A × R² + B × R + C
+P(m) = P(psi) × 0.703
+
+depth_label 1번 (302555): A=7.080E-08, B=-0.01296, C=106.0458
+depth_label 2,3번 (302554): A=1.429E-07, B=-0.01532, C=118.4773
+온도 보정 K=0 처리
+```
+
+### Linear (서브) — linear_value 필드
+```
+P(psi) = G × (초기값 - 현재값)
+P(m) = P(psi) × 0.703
+
+depth_label 1번: G=0.012044
+depth_label 2,3번: G=0.013450
+```
 
 ## 📌 버전
 
 - **v1.0.0** (2026.04.03)
+- **v1.1.0** (2026.04.15) — 80053 Polynomial/Linear 계산식, 재수집 API, 에이전트 heartbeat API, depthLabel 타입 수정
 
 ## ⚠️ 주의사항
 
 ### 권한 관리
-- **NonMultiMonitor**: `admin`, `Administrator`, `Manager`, `Operator`, `Monitor` 역할을 가진 사용자
-- **MultiMonitor** 역할은 센서 조회 및 파일 관리만 가능하며, 편집/삭제/사용자 관리/알람 처리 불가
-- **본인 계정의 권한을 변경할 때는 반드시 다른 관리자 계정이 존재하는지 확인하세요.**
-- 시스템에 관리자 계정이 본인 하나뿐인 상태에서 자신의 권한을 `MultiMonitor`로 변경하면 사용자 관리 기능을 사용할 수 없게 됩니다.
-- 이 경우 UI에서 복구가 불가능하며 DB에 직접 접근하거나 별도 복구 작업이 필요합니다.
-- **최소 1개 이상의 관리자 계정을 항상 유지하는 것을 권장합니다.**
+- **NonMultiMonitor**: `Administrator`, `Manager`, `Operator`, `Monitor` 역할
+- **MultiMonitor**: 센서 조회 및 파일 관리만 가능
+- 최소 1개 이상의 관리자 계정을 항상 유지할 것
 
 ### 파일 저장
-- Render 무료 플랜 특성상 서버 재시작 시 업로드된 파일이 삭제될 수 있습니다.
+- Render 특성상 서버 재시작 시 업로드된 파일이 삭제될 수 있음
 
 ### 데이터베이스
-- AWS RDS db.t3.micro 사용 중 (월 약 2~3만원 비용 발생)
+- AWS RDS db.t3.micro 사용 중 (월 약 $20~25 비용 발생)
+- 24시간 센서 데이터 수신 환경에 최적화
 
 ### DB 비밀번호 자동 교체
-- AWS Secrets Manager가 RDS 비밀번호를 자동 교체할 수 있음
-- 자동 교체 비활성화 완료 (2026.04.09)
-- 만약 DB 연결 오류 발생 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트 필요
+- AWS Secrets Manager 자동 교체 비활성화 완료 (2026.04.09)
+- DB 연결 오류 발생 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트 필요
