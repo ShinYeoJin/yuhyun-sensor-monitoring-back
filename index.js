@@ -308,6 +308,7 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
 app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'] }))
 app.use(express.json({ limit: '20mb' }))
+app.use('/uploads', express.static(UPLOAD_DIR))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 function requireKey(req, res, next) {
@@ -684,9 +685,11 @@ app.get('/api/sensors', async (req, res) => {
 
 app.get('/api/sensors/:id', async (req, res) => {
   try {
+    await pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     const { rows } = await pool.query(`
       SELECT s.*, ss.current_value, ss.status, ss.last_measured,
-             si.name AS site_name, si.site_code, si.managers AS site_managers, si.floor_plan_url AS site_floor_plan_url
+             si.name AS site_name, si.site_code, si.managers AS site_managers,
+             si.floor_plan_url AS site_floor_plan_url
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
