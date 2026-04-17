@@ -790,11 +790,12 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
 
     params.push(Number(limit))
     const { rows } = await pool.query(
-      `SELECT m.measured_at, m.value, m.depth_label FROM measurements m ${where} ORDER BY m.measured_at ASC LIMIT $${params.length}`, params)
+      `SELECT m.measured_at, m.value, m.depth_label, m.value AS raw_value FROM measurements m ${where} ORDER BY m.measured_at ASC LIMIT $${params.length}`, params)
 
     // 80053 계산식 적용 (Polynomial 메인, Linear 서브 둘 다 반환)
     if (is80053 && rows.length > 0) {
-      const initRaw = parseFloat(rows[0].value)
+      // depth별 첫 번째 raw값을 initRaw로 사용
+      const initRaw = parseFloat(rows[0].raw_value ?? rows[0].value)
       const converted = rows.map(r => {
         const raw = parseFloat(r.value)
         const dl = r.depth_label
