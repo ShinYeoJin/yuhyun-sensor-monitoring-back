@@ -558,6 +558,11 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     const sensor = rows[0]
     let inserted = 0
     for (const m of measurements) {
+      // 80053 센서 raw=0 또는 비정상 데이터 수신 차단
+      if (sensor.sensor_code === '80053' && (m.value === 0 || m.value === null || parseFloat(m.value) < 100)) {
+        console.log(`[필터링] 비정상 데이터 차단: sensorCode=${sensorCode}, value=${m.value}, measuredAt=${m.measuredAt}`)
+        continue
+      }
       const r = await client.query(
         `INSERT INTO measurements (sensor_id, measured_at, value, depth_label, raw_file)
          VALUES ($1,$2,$3,$4,$5)
@@ -1097,6 +1102,15 @@ app.get('/api/agent/status', requireAuth, async (req, res) => {
 pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
   .then(() => console.log('[DB] sensors.floor_plan_url 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+// 80053 비정상 데이터 자동 정리 (앱 시작 시 1회 실행)
+pool.query(`
+  DELETE FROM measurements 
+  WHERE sensor_id = 7 
+  AND value < 100 
+  AND depth_label IS NOT NULL
+`).then(r => console.log(`[DB] 80053 비정상 데이터 ${r.rowCount}건 정리 완료`))
+  .catch(err => console.error('[DB] 비정상 데이터 정리 오류:', err.message))
 
 pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS formula_params JSONB`)
   .then(() => console.log('[DB] sensors.formula_params 컬럼 확인 완료'))
