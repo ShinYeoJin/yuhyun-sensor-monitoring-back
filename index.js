@@ -925,34 +925,34 @@ app.delete('/api/formulas/:id', requireAuth, requireRole(NON_MULTIMONITOR), asyn
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// 평면도 업로드용 multer (메모리 저장 — base64로 DB에 저장)
+const floorPlanUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+    if (allowed.includes(file.mimetype)) cb(null, true)
+    else cb(new Error('이미지(JPG, PNG) 또는 PDF 파일만 업로드 가능합니다.'))
+  }
+})
+
 // 센서 평면도 업로드
-app.post('/api/sensors/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), upload.single('file'), async (req, res) => {
+app.post('/api/sensors/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), floorPlanUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
   try {
-    // DB 컬럼 없으면 자동 생성
-    await pool.query(`
-      ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT
-    `)
-    const fileUrl = `/uploads/${req.file.filename}`
-    await pool.query(
-      `UPDATE sensors SET floor_plan_url=$1 WHERE id=$2`,
-      [fileUrl, req.params.id])
-    res.json({ success: true, floor_plan_url: fileUrl })
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`
+    await pool.query(`UPDATE sensors SET floor_plan_url=$1 WHERE id=$2`, [base64, req.params.id])
+    res.json({ success: true, floor_plan_url: base64 })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 // 현장 평면도 업로드
-app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), upload.single('file'), async (req, res) => {
+app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), floorPlanUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
   try {
-    await pool.query(`
-      ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT
-    `)
-    const fileUrl = `/uploads/${req.file.filename}`
-    await pool.query(
-      `UPDATE sites SET floor_plan_url=$1 WHERE id=$2`,
-      [fileUrl, req.params.id])
-    res.json({ success: true, floor_plan_url: fileUrl })
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`
+    await pool.query(`UPDATE sites SET floor_plan_url=$1 WHERE id=$2`, [base64, req.params.id])
+    res.json({ success: true, floor_plan_url: base64 })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -1084,5 +1084,14 @@ app.get('/api/agent/status', requireAuth, async (req, res) => {
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
+
+// 앱 시작 시 필요한 컬럼 자동 생성
+pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
+  .then(() => console.log('[DB] sensors.floor_plan_url 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
+  .then(() => console.log('[DB] sites.floor_plan_url 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
 app.listen(PORT, () => console.log(`GeoMonitor API listening on port ${PORT}`))
