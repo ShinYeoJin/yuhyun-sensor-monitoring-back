@@ -668,8 +668,8 @@ app.get('/api/sensors', async (req, res) => {
         if (initRow.rows.length > 0) {
           const raw = parseFloat(s.current_value)
           // Polynomial (메인)
-          const A = 7.080e-8, B = -0.01296, C = 106.0458
-          const polyM = parseFloat(((A * raw * raw + B * raw + C) * 0.703).toFixed(4))
+          const A = 7.080e-8, B = -0.012296, C = 106.0458
+          const polyM = parseFloat(((A * raw * raw + B * raw + C) * 0.70307).toFixed(4))
           return { ...s, current_value: polyM }
         }
       }
@@ -694,8 +694,8 @@ app.get('/api/sensors/:id', async (req, res) => {
     if (sensor.sensor_code === '80053' && sensor.current_value !== null) {
       const raw = parseFloat(sensor.current_value)
       // Polynomial (메인)
-      const A = 7.080e-8, B = -0.01296, C = 106.0458
-      sensor.current_value = parseFloat(((A * raw * raw + B * raw + C) * 0.703).toFixed(4))
+      const A = 7.080e-8, B = -0.012296, C = 106.0458
+      sensor.current_value = parseFloat(((A * raw * raw + B * raw + C) * 0.70307).toFixed(4))
     }
     res.json(sensor)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -793,7 +793,7 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
 
         // Polynomial 계수
         const A = dl === '1' ? 7.080e-8  : 1.429e-7
-        const B = dl === '1' ? -0.01296  : -0.01532
+        const B = dl === '1' ? -0.012296 : -0.015320
         const C = dl === '1' ? 106.0458  : 118.4773
 
         // Linear 계수
@@ -801,11 +801,11 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
 
         // Polynomial (메인) - K=0 (온도 보정 없음)
         const polyPsi = A * raw * raw + B * raw + C
-        const polyM   = parseFloat((polyPsi * 0.703).toFixed(4))
+        const polyM   = parseFloat((polyPsi * 0.70307).toFixed(4))
 
         // Linear (서브)
         const linearPsi = G * (initRaw - raw)
-        const linearM   = parseFloat((linearPsi * 0.703).toFixed(4))
+        const linearM   = parseFloat((linearPsi * 0.70307).toFixed(4))
 
         return {
           ...r,
