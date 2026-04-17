@@ -794,8 +794,13 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
 
     // 80053 계산식 적용 (Polynomial 메인, Linear 서브 둘 다 반환)
     if (is80053 && rows.length > 0) {
-      // rows는 ASC 정렬이므로 rows[0]이 가장 오래된 값 = 초기값
-      const initRaw = parseFloat(rows[0].value) // DB value = raw값 (아직 계산 전)
+      // 날짜 범위와 무관하게 해당 depth의 전체 기간 첫 번째 raw값을 initRaw로 사용
+      const currentDepth = rows[0].depth_label
+      const initRow = await pool.query(
+        `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label=$2 ORDER BY measured_at ASC LIMIT 1`,
+        [req.params.id, currentDepth]
+      )
+      const initRaw = initRow.rows.length > 0 ? parseFloat(initRow.rows[0].value) : parseFloat(rows[0].value)
       const converted = rows.map(r => {
         const raw = parseFloat(r.value)
         const dl = r.depth_label
