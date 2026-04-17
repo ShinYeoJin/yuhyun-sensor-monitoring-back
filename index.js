@@ -589,29 +589,32 @@ app.post('/api/ingest', requireKey, async (req, res) => {
 
 app.get('/api/sites', async (req, res) => {
   try {
+    await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     const { rows } = await pool.query(`SELECT * FROM sites ORDER BY id`)
     res.json(rows.map(s => ({ ...s, managers: JSON.parse(s.managers || '[]') })))
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 app.post('/api/sites', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, location, description, managers } = req.body
+  const { name, location, description, managers, floor_plan_url } = req.body
   if (!name) return res.status(400).json({ error: '현장명 필수' })
   try {
+    await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     const site_code = 'site-' + Date.now()
     const { rows } = await pool.query(
-      `INSERT INTO sites (site_code, name, location, description, managers) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [site_code, name, location || '', description || '', JSON.stringify(managers || [])])
+      `INSERT INTO sites (site_code, name, location, description, managers, floor_plan_url) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [site_code, name, location || '', description || '', JSON.stringify(managers || []), floor_plan_url || null])
     res.status(201).json({ success: true, site: rows[0] })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 app.patch('/api/sites/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, location, description, managers } = req.body
+  const { name, location, description, managers, floor_plan_url } = req.body
   try {
+    await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     await pool.query(
-      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4 WHERE id=$5`,
-      [name, location, description, JSON.stringify(managers || []), req.params.id])
+      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4, floor_plan_url=$5 WHERE id=$6`,
+      [name, location, description, JSON.stringify(managers || []), floor_plan_url || null, req.params.id])
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -683,7 +686,7 @@ app.get('/api/sensors/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT s.*, ss.current_value, ss.status, ss.last_measured,
-             si.name AS site_name, si.site_code, si.managers AS site_managers
+             si.name AS site_name, si.site_code, si.managers AS site_managers, si.floor_plan_url AS site_floor_plan_url
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
@@ -916,6 +919,37 @@ app.delete('/api/formulas/:id', requireAuth, requireRole(NON_MULTIMONITOR), asyn
   try {
     await pool.query(`UPDATE formulas SET is_active=false WHERE id=$1`, [req.params.id])
     res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// 센서 평면도 업로드
+app.post('/api/sensors/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
+  try {
+    // DB 컬럼 없으면 자동 생성
+    await pool.query(`
+      ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT
+    `)
+    const fileUrl = `/uploads/${req.file.filename}`
+    await pool.query(
+      `UPDATE sensors SET floor_plan_url=$1 WHERE id=$2`,
+      [fileUrl, req.params.id])
+    res.json({ success: true, floor_plan_url: fileUrl })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// 현장 평면도 업로드
+app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
+  try {
+    await pool.query(`
+      ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT
+    `)
+    const fileUrl = `/uploads/${req.file.filename}`
+    await pool.query(
+      `UPDATE sites SET floor_plan_url=$1 WHERE id=$2`,
+      [fileUrl, req.params.id])
+    res.json({ success: true, floor_plan_url: fileUrl })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
