@@ -794,13 +794,13 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
 
     // 80053 계산식 적용 (Polynomial 메인, Linear 서브 둘 다 반환)
     if (is80053 && rows.length > 0) {
-      // depth별 첫 번째 raw값을 initRaw로 사용
-      const initRaw = parseFloat(rows[0].raw_value ?? rows[0].value)
+      // rows는 ASC 정렬이므로 rows[0]이 가장 오래된 값 = 초기값
+      const initRaw = parseFloat(rows[0].value) // DB value = raw값 (아직 계산 전)
       const converted = rows.map(r => {
         const raw = parseFloat(r.value)
         const dl = r.depth_label
 
-        // Polynomial 계수
+        // Polynomial 계수 (수정된 B값)
         const A = dl === '1' ? 7.080e-8  : 1.429e-7
         const B = dl === '1' ? -0.012296 : -0.015320
         const C = dl === '1' ? 106.0458  : 118.4773
@@ -808,18 +808,18 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
         // Linear 계수
         const G = dl === '1' ? 0.012044 : 0.013450
 
-        // Polynomial (메인) - K=0 (온도 보정 없음)
+        // Polynomial
         const polyPsi = A * raw * raw + B * raw + C
         const polyM   = parseFloat((polyPsi * 0.70307).toFixed(4))
 
-        // Linear (서브)
+        // Linear
         const linearPsi = G * (initRaw - raw)
         const linearM   = parseFloat((linearPsi * 0.70307).toFixed(4))
 
         return {
           ...r,
-          value: polyM,        // 메인값 (Polynomial)
-          linear_value: linearM, // 서브값 (Linear)
+          value: polyM,
+          linear_value: linearM,
           raw_value: raw,
         }
       })
