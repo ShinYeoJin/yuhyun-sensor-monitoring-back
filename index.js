@@ -733,11 +733,11 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
     if (level2_lower !== undefined)       { fields.push(`level2_lower=$${idx++}`);       values.push(level2_lower) }
     if (criteria_unit !== undefined)      { fields.push(`criteria_unit=$${idx++}`);      values.push(criteria_unit) }
     if (criteria_unit_name !== undefined) { fields.push(`criteria_unit_name=$${idx++}`); values.push(criteria_unit_name) }
-    if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' })
     if (install_date !== undefined)       { fields.push(`install_date=$${idx++}`);       values.push(install_date) }
     if (location_desc !== undefined)      { fields.push(`location_desc=$${idx++}`);      values.push(location_desc) }
     if (formula_params !== undefined)     { fields.push(`formula_params=$${idx++}`);     values.push(JSON.stringify(formula_params)) }
     if (correction_params !== undefined)  { fields.push(`correction_params=$${idx++}`);  values.push(JSON.stringify(correction_params)) }
+    if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' })  // ← 맨 아래로 이동
     values.push(req.params.id)
     const { rows } = await pool.query(
       `UPDATE sensors SET ${fields.join(', ')} WHERE id=$${idx} RETURNING *`,
