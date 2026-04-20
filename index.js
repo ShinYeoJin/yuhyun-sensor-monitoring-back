@@ -1120,18 +1120,5 @@ pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
   .then(() => console.log('[DB] sites.floor_plan_url 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
-// 임시 — formula_params 컬럼 강제 생성 (1회 사용 후 제거)
-app.get('/api/admin/migrate', async (req, res) => {
-  try {
-    await pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS formula_params JSONB`)
-    const check = await pool.query(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'sensors' AND column_name = 'formula_params'
-    `)
-    res.json({ success: true, columns: check.rows })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
 
 app.listen(PORT, () => console.log(`GeoMonitor API listening on port ${PORT}`))
