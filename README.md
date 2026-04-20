@@ -62,8 +62,10 @@ PORT=4000
 | GET | /api/sensors/:id | 센서 상세 | - |
 | GET | /api/sensors/:id/measurements | 측정값 (depthLabel 파라미터 지원) | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
+| PATCH | /api/sensors/:id | 센서 정보 수정 (formula_params, correction_params 포함) | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/threshold | 임계값 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
+| POST | /api/sensors/:id/floor-plan | 센서 평면도 업로드 (base64) | JWT + NonMultiMonitor |
 | POST | /api/ingest | 센서 데이터 수신 (depthLabel 문자열 강제 변환) | API Key |
 | GET | /api/alarms | 알람 목록 | - |
 | PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
@@ -72,6 +74,7 @@ PORT=4000
 | POST | /api/sites | 현장 추가 | JWT + NonMultiMonitor |
 | PATCH | /api/sites/:id | 현장 수정 | JWT + NonMultiMonitor |
 | DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
+| POST | /api/sites/:id/floor-plan | 현장 평면도 업로드 (base64) | JWT + NonMultiMonitor |
 | GET | /api/users | 사용자 목록 | JWT + NonMultiMonitor |
 | GET | /api/users/list | 사용자 목록 (인증 없음) | - |
 | PATCH | /api/users/:id/edit | 사용자 수정 | JWT + NonMultiMonitor |
@@ -110,6 +113,15 @@ users               - 사용자 정보 (phone 컬럼 포함)
 files               - 업로드 파일 정보
 recollect_requests  - 재수집 요청 이력 (최초 호출 시 자동 생성)
 agent_status        - 에이전트 상태 (최초 호출 시 자동 생성)
+
+sensors 테이블 추가 컬럼:
+- floor_plan_url:    센서별 평면도 (base64)
+- formula_params:    계산식 계수값 (JSONB)
+- correction_params: depth별 보정값 (JSONB) ← 신규
+  예: { "1": 0.5, "2": -0.3, "3": 0.0 }
+
+sites 테이블 추가 컬럼:
+- floor_plan_url: 현장별 평면도 (base64)
 ```
 
 ## 🤖 에이전트 v2.1
@@ -130,6 +142,7 @@ C:\geomonitor-agent\
 - **재수집 폴링**: 매 실행마다 pending 재수집 요청 확인 후 처리
   - 관리자가 웹에서 센서 + 날짜 선택 → 에이전트가 해당 날짜 이후 데이터 재전송
   - 재수집은 파일에 해당 날짜 데이터가 존재해야 가능
+  - 80053 비정상 데이터 필터링: sendBatch에서 value < 100 데이터 전송 제외
 
 ### 에이전트 실행 (pm2)
 ```powershell
@@ -154,29 +167,34 @@ pm2 logs geomonitor-agent
 `GET /api/sensors`, `GET /api/sensors/:id`, `GET /api/sensors/:id/measurements` 에서
 80053 센서의 경우 raw 데이터에 계산식 적용 후 반환
 
-### Polynomial (메인) — value 필드
-```
-P(psi) = A × R² + B × R + C
-P(m) = P(psi) × 0.703
-
-depth_label 1번 (302555): A=7.080E-08, B=-0.01296, C=106.0458
-depth_label 2,3번 (302554): A=1.429E-07, B=-0.01532, C=118.4773
-온도 보정 K=0 처리
-```
-
-### Linear (서브) — linear_value 필드
+### Linear (메인) — linear_value 필드
 ```
 P(psi) = G × (초기값 - 현재값)
-P(m) = P(psi) × 0.703
+P(m) = P(psi) × 0.70307
 
 depth_label 1번: G=0.012044
 depth_label 2,3번: G=0.013450
 ```
 
+### Polynomial (서브) — value 필드
+```
+P(psi) = A × R² + B × R + C
+P(m) = P(psi) × 0.70307
+
+depth_label 1번 (302555): A=7.080E-08, B=-0.012296, C=106.0458
+depth_label 2,3번 (302554): A=1.429E-07, B=-0.015320, C=118.4773
+온도 보정 K=0 처리
+```
+
+### current_value 반환 기준
+- `GET /api/sensors` 및 `GET /api/sensors/:id` 에서 80053 센서의 `current_value`는
+  **Linear(메인) 계산값**으로 반환 (depth_label 1번 기준)
+
 ## 📌 버전
 
 - **v1.0.0** (2026.04.03)
 - **v1.1.0** (2026.04.15) — 80053 Polynomial/Linear 계산식, 재수집 API, 에이전트 heartbeat API, depthLabel 타입 수정
+- **v1.2.0** (2026.04.20) — correction_params(보정값) 기능 추가, PATCH /api/sensors/:id 버그 수정, 센서 목록 current_value Linear 기준으로 변경
 
 ## ⚠️ 주의사항
 
@@ -195,3 +213,12 @@ depth_label 2,3번: G=0.013450
 ### DB 비밀번호 자동 교체
 - AWS Secrets Manager 자동 교체 비활성화 완료 (2026.04.09)
 - DB 연결 오류 발생 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트 필요
+
+### 80053 비정상 데이터(raw=0) 3단계 방어
+1. /api/ingest: value < 100 차단 (DB 저장 자체 방지)
+2. 앱 시작 시: 기존 비정상 데이터 자동 삭제
+3. 에이전트: 전송 전 value < 100 필터링
+
+### PATCH /api/sensors/:id 주의사항
+- `fields.length === 0` 체크는 반드시 모든 필드 추가 후 마지막에 위치해야 함
+- correction_params, formula_params만 단독 전송 시에도 정상 저장되어야 함
