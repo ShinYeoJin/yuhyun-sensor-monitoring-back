@@ -676,10 +676,11 @@ app.get('/api/sensors', async (req, res) => {
           [s.id])
         if (initRow.rows.length > 0) {
           const raw = parseFloat(s.current_value)
-          // Polynomial (메인)
-          const A = 7.080e-8, B = -0.012296, C = 106.0458
-          const polyM = parseFloat(((A * raw * raw + B * raw + C) * 0.70307).toFixed(4))
-          return { ...s, current_value: polyM }
+          const initRaw = parseFloat(initRow.rows[0].value)
+          // Linear (메인)
+          const G = 0.012044
+          const linearM = parseFloat((G * (initRaw - raw) * 0.70307).toFixed(4))
+          return { ...s, current_value: linearM }
         }
       }
       return s
