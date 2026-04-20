@@ -716,7 +716,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
   const { name, manage_no, sensor_type, unit, field, formula,
     level1_upper, level1_lower, level2_upper, level2_lower,
     criteria_unit, criteria_unit_name, install_date, location_desc,
-    formula_params } = req.body
+    formula_params, correction_params } = req.body
   try {
     const fields = []
     const values = []
@@ -737,6 +737,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
     if (install_date !== undefined)       { fields.push(`install_date=$${idx++}`);       values.push(install_date) }
     if (location_desc !== undefined)      { fields.push(`location_desc=$${idx++}`);      values.push(location_desc) }
     if (formula_params !== undefined)     { fields.push(`formula_params=$${idx++}`);     values.push(JSON.stringify(formula_params)) }
+    if (correction_params !== undefined)  { fields.push(`correction_params=$${idx++}`);  values.push(JSON.stringify(correction_params)) }
     values.push(req.params.id)
     const { rows } = await pool.query(
       `UPDATE sensors SET ${fields.join(', ')} WHERE id=$${idx} RETURNING *`,
@@ -1114,6 +1115,10 @@ pool.query(`
 
 pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS formula_params JSONB`)
   .then(() => console.log('[DB] sensors.formula_params 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+  pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS correction_params JSONB`)
+  .then(() => console.log('[DB] sensors.correction_params 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
 pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
