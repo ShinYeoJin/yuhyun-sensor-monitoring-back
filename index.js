@@ -695,7 +695,8 @@ app.get('/api/sensors/:id', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT s.*, ss.current_value, ss.status, ss.last_measured,
              si.name AS site_name, si.site_code, si.managers AS site_managers,
-             si.floor_plan_url AS site_floor_plan_url
+             (s.floor_plan_url IS NOT NULL) AS has_floor_plan,
+             (si.floor_plan_url IS NOT NULL) AS has_site_floor_plan
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
