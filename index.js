@@ -1,4 +1,5 @@
 require('dotenv').config()
+const { pdfToPng } = require('pdf-to-png-converter')
 const express  = require('express')
 const cors     = require('cors')
 const { Pool } = require('pg')
@@ -696,7 +697,11 @@ app.get('/api/sensors/:id', async (req, res) => {
       SELECT s.*, ss.current_value, ss.status, ss.last_measured,
              si.name AS site_name, si.site_code, si.managers AS site_managers,
              (s.floor_plan_url IS NOT NULL) AS has_floor_plan,
-             (si.floor_plan_url IS NOT NULL) AS has_site_floor_plan
+             (si.floor_plan_url IS NOT NULL) AS has_site_floor_plan,
+             CASE WHEN s.floor_plan_url IS NOT NULL
+               THEN substring(s.floor_plan_url from 'data:([^;]+);')
+               ELSE substring(si.floor_plan_url from 'data:([^;]+);')
+             END AS floor_plan_mime
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
