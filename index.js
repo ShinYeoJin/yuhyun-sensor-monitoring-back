@@ -971,6 +971,28 @@ app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// 센서 평면도 이미지 서빙 (센서 평면도 우선, 없으면 현장 평면도)
+app.get('/api/sensors/:id/floor-plan-image', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT s.floor_plan_url AS sensor_fp, si.floor_plan_url AS site_fp
+      FROM sensors s
+      LEFT JOIN sites si ON s.site_id = si.id
+      WHERE s.id=$1
+    `, [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' })
+    const base64 = rows[0].sensor_fp || rows[0].site_fp
+    if (!base64) return res.status(404).json({ error: 'No floor plan' })
+    const matches = base64.match(/^data:(.+);base64,(.+)$/)
+    if (!matches) return res.status(400).json({ error: 'Invalid format' })
+    const mimeType = matches[1]
+    const buffer = Buffer.from(matches[2], 'base64')
+    res.setHeader('Content-Type', mimeType)
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    res.send(buffer)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.get('/api/health', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT NOW() AS now')
