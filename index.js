@@ -954,12 +954,29 @@ const floorPlanUpload = multer({
 })
 
 // 센서 평면도 업로드
+app.post('/api/sensors/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), floorPlanUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' })
+    let imageBuffer = req.file.buffer
+    let mimeType = req.file.mimetype
+    if (req.file.mimetype === 'application/pdf') {
+      const pages = await pdfToPng(req.file.buffer, { viewportScale: 2.0, pagesToProcess: [1] })
+      if (!pages || pages.length === 0) return res.status(400).json({ error: 'PDF 변환 실패' })
+      imageBuffer = pages[0].content
+      mimeType = 'image/png'
+    }
+    const base64 = `data:${mimeType};base64,${imageBuffer.toString('base64')}`
+    await pool.query(`UPDATE sensors SET floor_plan_url=$1 WHERE id=$2`, [base64, req.params.id])
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// 현장 평면도 업로드
 app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), floorPlanUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' })
     let imageBuffer = req.file.buffer
     let mimeType = req.file.mimetype
-    // PDF인 경우 첫 페이지를 PNG로 변환
     if (req.file.mimetype === 'application/pdf') {
       const pages = await pdfToPng(req.file.buffer, { viewportScale: 2.0, pagesToProcess: [1] })
       if (!pages || pages.length === 0) return res.status(400).json({ error: 'PDF 변환 실패' })
@@ -969,16 +986,6 @@ app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR)
     const base64 = `data:${mimeType};base64,${imageBuffer.toString('base64')}`
     await pool.query(`UPDATE sites SET floor_plan_url=$1 WHERE id=$2`, [base64, req.params.id])
     res.json({ success: true })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 현장 평면도 업로드
-app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), floorPlanUpload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
-  try {
-    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`
-    await pool.query(`UPDATE sites SET floor_plan_url=$1 WHERE id=$2`, [base64, req.params.id])
-    res.json({ success: true, floor_plan_url: base64 })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
