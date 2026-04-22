@@ -599,7 +599,8 @@ app.get('/api/sites', async (req, res) => {
     await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     const { rows } = await pool.query(`
       SELECT id, site_code, name, location, description, managers,
-             (floor_plan_url IS NOT NULL) AS has_floor_plan
+             (floor_plan_url IS NOT NULL) AS has_floor_plan,
+             sensor_positions
       FROM sites ORDER BY id`)
     res.json(rows.map(s => ({ ...s, managers: JSON.parse(s.managers || '[]') })))
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -699,8 +700,10 @@ app.get('/api/sensors/:id', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT s.*, ss.current_value, ss.status, ss.last_measured,
              si.name AS site_name, si.site_code, si.managers AS site_managers,
-             (si.floor_plan_url IS NOT NULL) AS has_floor_plan,
-             (si.floor_plan_url IS NOT NULL) AS has_site_floor_plan
+             si.id AS site_db_id,
+             (s.floor_plan_url IS NOT NULL) AS has_floor_plan,
+             (si.floor_plan_url IS NOT NULL) AS has_site_floor_plan,
+             si.sensor_positions
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
@@ -1037,6 +1040,18 @@ app.get('/api/sites/:id/floor-plan-image', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// 현장 센서 아이콘 위치 저장
+app.patch('/api/sites/:id/sensor-positions', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
+  try {
+    const { positions } = req.body
+    await pool.query(
+      `UPDATE sites SET sensor_positions=$1 WHERE id=$2`,
+      [JSON.stringify(positions), req.params.id]
+    )
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.get('/api/health', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT NOW() AS now')
@@ -1170,6 +1185,10 @@ app.get('/api/agent/status', requireAuth, async (req, res) => {
 pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
   .then(() => console.log('[DB] sensors.floor_plan_url 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS sensor_positions JSONB DEFAULT '{}'`)
+  .then(() => console.log('[DB] sites.sensor_positions 컬럼 확인 완료'))
+  .catch(console.error)
 
 // 80053 비정상 데이터 자동 정리 (앱 시작 시 1회 실행)
 pool.query(`
