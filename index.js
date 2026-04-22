@@ -696,7 +696,7 @@ app.get('/api/sensors/:id', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT s.*, ss.current_value, ss.status, ss.last_measured,
              si.name AS site_name, si.site_code, si.managers AS site_managers,
-             (s.floor_plan_url IS NOT NULL) AS has_floor_plan,
+             (si.floor_plan_url IS NOT NULL) AS has_floor_plan,
              (si.floor_plan_url IS NOT NULL) AS has_site_floor_plan
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
@@ -957,6 +957,11 @@ const floorPlanUpload = multer({
 app.post('/api/sensors/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR), floorPlanUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' })
+    // 센서가 속한 현장 조회
+    const sensorRow = await pool.query(`SELECT site_id FROM sensors WHERE id=$1`, [req.params.id])
+    if (sensorRow.rows.length === 0) return res.status(404).json({ error: 'Sensor not found' })
+    const siteId = sensorRow.rows[0].site_id
+    if (!siteId) return res.status(400).json({ error: '센서에 현장이 배정되지 않았습니다.' })
     let imageBuffer = req.file.buffer
     let mimeType = req.file.mimetype
     if (req.file.mimetype === 'application/pdf') {
@@ -966,7 +971,7 @@ app.post('/api/sensors/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITO
       mimeType = 'image/png'
     }
     const base64 = `data:${mimeType};base64,${imageBuffer.toString('base64')}`
-    await pool.query(`UPDATE sensors SET floor_plan_url=$1 WHERE id=$2`, [base64, req.params.id])
+    await pool.query(`UPDATE sites SET floor_plan_url=$1 WHERE id=$2`, [base64, siteId])
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -989,17 +994,17 @@ app.post('/api/sites/:id/floor-plan', requireAuth, requireRole(NON_MULTIMONITOR)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// 센서 평면도 이미지 서빙 (센서 평면도 우선, 없으면 현장 평면도)
+// 센서 평면도 이미지 서빙
 app.get('/api/sensors/:id/floor-plan-image', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT s.floor_plan_url AS sensor_fp, si.floor_plan_url AS site_fp
+      SELECT si.floor_plan_url AS site_fp
       FROM sensors s
       LEFT JOIN sites si ON s.site_id = si.id
       WHERE s.id=$1
     `, [req.params.id])
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' })
-    const base64 = rows[0].sensor_fp || rows[0].site_fp
+    const base64 = rows[0].site_fp
     if (!base64) return res.status(404).json({ error: 'No floor plan' })
     const matches = base64.match(/^data:(.+);base64,(.+)$/)
     if (!matches) return res.status(400).json({ error: 'Invalid format' })
