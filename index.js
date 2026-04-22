@@ -771,8 +771,15 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
   try {
     const params = [req.params.id]
     let where = 'WHERE m.sensor_id=$1'
-    if (from) { params.push(from + 'T00:00:00+09:00'); where += ` AND m.measured_at >= $${params.length}` }
-    if (to)   { params.push(to   + 'T23:59:59+09:00'); where += ` AND m.measured_at <= $${params.length}` }
+    if (from) {
+      // T가 포함되어 있으면 이미 시간 정보가 있으므로 그대로 사용
+      const fromStr = from.includes('T') ? from + '+09:00' : from + 'T00:00:00+09:00'
+      params.push(fromStr); where += ` AND m.measured_at >= $${params.length}`
+    }
+    if (to) {
+      const toStr = to.includes('T') ? to + '+09:00' : to + 'T23:59:59+09:00'
+      params.push(toStr); where += ` AND m.measured_at <= $${params.length}`
+    }
 
     const sensorCheck = await pool.query(
       `SELECT sensor_code FROM sensors WHERE id=$1`, [req.params.id])
