@@ -597,7 +597,10 @@ app.post('/api/ingest', requireKey, async (req, res) => {
 app.get('/api/sites', async (req, res) => {
   try {
     await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
-    const { rows } = await pool.query(`SELECT * FROM sites ORDER BY id`)
+    const { rows } = await pool.query(`
+      SELECT id, site_code, name, location, description, managers,
+             (floor_plan_url IS NOT NULL) AS has_floor_plan
+      FROM sites ORDER BY id`)
     res.json(rows.map(s => ({ ...s, managers: JSON.parse(s.managers || '[]') })))
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
