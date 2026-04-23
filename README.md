@@ -60,10 +60,10 @@ PORT=4000
 | POST | /api/auth/logout | 로그아웃 | JWT |
 | GET | /api/auth/me | 내 정보 (토큰 유효성 검증용) | JWT |
 | GET | /api/sensors | 센서 목록 | - |
-| GET | /api/sensors/:id | 센서 상세 (has_floor_plan, has_site_floor_plan, sensor_positions 포함) | - |
+| GET | /api/sensors/:id | 센서 상세 (has_floor_plan, has_site_floor_plan, sensor_positions, depth_criteria 포함) | - |
 | GET | /api/sensors/:id/measurements | 측정값 (from/to 시간 포함 시 정확한 시각 필터링) | - |
 | GET | /api/sensors/:id/depths | 깊이 목록 | - |
-| PATCH | /api/sensors/:id | 센서 정보 수정 (formula_params, correction_params 포함) | JWT + NonMultiMonitor |
+| PATCH | /api/sensors/:id | 센서 정보 수정 (formula_params, correction_params, depth_criteria 포함) | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/threshold | 임계값 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
 | POST | /api/sensors/:id/floor-plan | 평면도 업로드 → 해당 센서의 현장(sites)에 저장 | JWT + NonMultiMonitor |
@@ -118,16 +118,18 @@ files               - 업로드 파일 정보
 recollect_requests  - 재수집 요청 이력 (최초 호출 시 자동 생성)
 agent_status        - 에이전트 상태 (최초 호출 시 자동 생성)
 
-sensors 테이블 추가 컬럼:
-- floor_plan_url:    센서별 평면도 (base64, 미사용 예정 → 현장 평면도로 통일)
+sensors 테이블 추가 컬럼 (자동 마이그레이션):
+- floor_plan_url:    센서별 평면도 (base64, 미사용 → 현장 평면도로 통일)
 - formula_params:    계산식 계수값 (JSONB)
 - correction_params: depth별 보정값 (JSONB)
   예: { "1": 0.5, "2": -0.3, "3": 0.0 }
+- depth_criteria:    depth별 1차 관리기준 상하한 (JSONB)
+  예: { "1": { "upper": -1.0, "lower": -5.0 }, "2": { "upper": -2.0, "lower": -6.0 } }
 
-sites 테이블 추가 컬럼:
-- floor_plan_url:      현장별 평면도 (base64, PNG/JPG로 변환 저장)
-- sensor_positions:    센서 아이콘 위치 (JSONB)
-  예: { "7:1": { "label": "80053 1번", "x": 0.3, "y": 0.5 } }
+sites 테이블 추가 컬럼 (자동 마이그레이션):
+- floor_plan_url:    현장별 평면도 (base64, PNG/JPG로 변환 저장)
+- sensor_positions:  센서 아이콘 위치 및 이름 (JSONB)
+  예: { "7:1": { "label": "WL-01", "x": 0.3, "y": 0.5 } }
 ```
 
 ## 🖼 평면도 관리 구조
@@ -142,6 +144,8 @@ sites 테이블 추가 컬럼:
   현장 편집 모달 업로드 → POST /api/sites/:id/floor-plan
     → sites.floor_plan_url에 저장
 
+  ※ 현장 추가 모달에서는 업로드 불가 (siteId 없음), 추가 후 편집에서 업로드
+
 이미지 서빙:
   GET /api/sensors/:id/floor-plan-image → 해당 센서의 현장 평면도 반환
   GET /api/sites/:id/floor-plan-image   → 현장 평면도 반환
@@ -149,6 +153,21 @@ sites 테이블 추가 컬럼:
 PDF 자동 변환:
   업로드 파일이 application/pdf인 경우 pdf-to-png-converter로
   첫 페이지 PNG 변환 후 저장 → 모든 브라우저에서 img 태그로 표시 가능
+```
+
+## 📐 1차 관리기준 구조
+
+```
+일반 센서:
+  sensors.level1_upper / sensors.level1_lower 컬럼 사용
+  PATCH /api/sensors/:id 로 저장
+
+80053 수위계 (depth별 개별 설정):
+  sensors.depth_criteria JSONB 컬럼 사용
+  PATCH /api/sensors/:id { depth_criteria: { "1": { upper, lower }, "2": {...}, "3": {...} } }
+  depth 전환 시 해당 depth의 기준값을 그래프·측정값·엑셀·PDF에 즉시 반영
+
+※ 자동계산(초기값 ± 4m) 방식 폐기 → 관리자 직접 입력 방식으로 전환
 ```
 
 ## 🤖 에이전트 v2.1
@@ -226,6 +245,7 @@ depth_label 2,3번 (302554): A=1.429E-07, B=-0.015320, C=118.4773
 - **v1.1.0** (2026.04.15) — 80053 Polynomial/Linear 계산식, 재수집 API, 에이전트 heartbeat API, depthLabel 타입 수정
 - **v1.2.0** (2026.04.20) — correction_params(보정값) 기능 추가, PATCH /api/sensors/:id 버그 수정, 센서 목록 current_value Linear 기준으로 변경
 - **v1.3.0** (2026.04.22) — 평면도 현장 단위 통일, PDF→PNG 자동 변환 (pdf-to-png-converter), 평면도 이미지 서빙 API 분리, sensor_positions API 추가, measurements 시간 필터링 정확도 개선
+- **v1.4.0** (2026.04.23) — depth_criteria JSONB 컬럼 추가, PATCH /api/sensors/:id depth_criteria 지원, 1차 관리기준 자동계산 폐기(직접 입력 방식 전환)
 
 ## ⚠️ 주의사항
 
@@ -253,9 +273,10 @@ depth_label 2,3번 (302554): A=1.429E-07, B=-0.015320, C=118.4773
 
 ### PATCH /api/sensors/:id 주의사항
 - `fields.length === 0` 체크는 반드시 모든 필드 추가 후 마지막에 위치해야 함
-- correction_params, formula_params만 단독 전송 시에도 정상 저장되어야 함
+- correction_params, formula_params, depth_criteria만 단독 전송 시에도 정상 저장되어야 함
 
 ### 새 API 추가 시 주의사항
 - `POST /api/sensors/:id/floor-plan`: sensors가 아닌 sites 테이블에 저장 (현장 단위 통일)
 - `PATCH /api/sites/:id/sensor-positions`: positions JSON 객체 전체를 교체 방식으로 저장
 - 평면도 서빙 API는 인증 없이 공개 (`requireAuth` 없음) — img 태그에서 직접 호출하기 때문
+- `depth_criteria` 저장 시 JSON.stringify() 적용 필요 (formula_params와 동일)
