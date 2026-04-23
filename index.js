@@ -668,7 +668,7 @@ app.get('/api/sensors', async (req, res) => {
              s.location_desc, s.install_date, s.threshold_normal_max, s.threshold_warning_max, s.threshold_danger_min,
              ss.current_value, ss.status, ss.last_measured, si.name AS site_name, si.site_code,
              s.level1_upper, s.level1_lower, s.level2_upper, s.level2_lower,
-             s.criteria_unit, s.criteria_unit_name, s.formula
+             s.criteria_unit, s.criteria_unit_name, s.formula, s.depth_criteria
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
@@ -725,7 +725,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
   const { name, manage_no, sensor_type, unit, field, formula,
     level1_upper, level1_lower, level2_upper, level2_lower,
     criteria_unit, criteria_unit_name, install_date, location_desc,
-    formula_params, correction_params } = req.body
+    formula_params, correction_params, depth_criteria } = req.body
   try {
     const fields = []
     const values = []
@@ -746,6 +746,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
     if (location_desc !== undefined)      { fields.push(`location_desc=$${idx++}`);      values.push(location_desc) }
     if (formula_params !== undefined)     { fields.push(`formula_params=$${idx++}`);     values.push(JSON.stringify(formula_params)) }
     if (correction_params !== undefined)  { fields.push(`correction_params=$${idx++}`);  values.push(JSON.stringify(correction_params)) }
+    if (depth_criteria !== undefined)     { fields.push(`depth_criteria=$${idx++}`);      values.push(JSON.stringify(depth_criteria)) }
     if (fields.length === 0) return res.status(400).json({ error: '수정할 항목이 없습니다.' })  // ← 맨 아래로 이동
     values.push(req.params.id)
     const { rows } = await pool.query(
@@ -1210,8 +1211,12 @@ pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS formula_params JSONB`)
   .then(() => console.log('[DB] sensors.formula_params 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
-  pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS correction_params JSONB`)
+pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS correction_params JSONB`)
   .then(() => console.log('[DB] sensors.correction_params 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS depth_criteria JSONB`)
+  .then(() => console.log('[DB] sensors.depth_criteria 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
 pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
