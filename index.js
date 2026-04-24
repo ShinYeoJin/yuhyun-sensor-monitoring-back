@@ -620,12 +620,12 @@ app.post('/api/sites', requireAuth, requireRole(NON_MULTIMONITOR), async (req, r
 })
 
 app.patch('/api/sites/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, location, description, managers, floor_plan_url } = req.body
+  const { name, location, description, managers } = req.body
   try {
     await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     await pool.query(
-      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4, floor_plan_url=$5 WHERE id=$6`,
-      [name, location, description, JSON.stringify(managers || []), floor_plan_url || null, req.params.id])
+      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4 WHERE id=$5`,
+      [name, location, description, JSON.stringify(managers || []), req.params.id])
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
