@@ -17,7 +17,7 @@ const swaggerOptions = {
     info: {
       title: 'GeoMonitor API',
       version: '1.4.1',
-      description: '지반 계측 모니터링 시스템 API\n\n**인증 방법**: 로그인 후 발급된 JWT 토큰을 Authorize 버튼에 입력\n\n**에이전트 API**: X-API-Key 헤더에 `geomonitor-secret-2026` 입력',
+      description: '지반 계측 모니터링 시스템 API\n\n**인증 방법**: 로그인 후 발급된 JWT 토큰을 Authorize 버튼에 입력\n\n**에이전트 전용 API** (`/api/ingest`, `/api/agent/*`, `/api/recollect/pending`)는 현장 PC 에이전트에서만 사용하며 앱 개발 시 불필요합니다.',
     },
     servers: [{ url: 'https://yuhyun-sensor-monitoring-back.onrender.com' }],
     components: {

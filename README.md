@@ -59,48 +59,61 @@ PORT=4000
 | POST | /api/auth/login | 로그인 | - |
 | POST | /api/auth/logout | 로그아웃 | JWT |
 | GET | /api/auth/me | 내 정보 (토큰 유효성 검증용) | JWT |
+
 | GET | /api/sensors | 센서 목록 | - |
-| GET | /api/sensors/:id | 센서 상세 (has_floor_plan, has_site_floor_plan, sensor_positions, depth_criteria 포함) | - |
-| GET | /api/sensors/:id/measurements | 측정값 (from/to 시간 포함 시 정확한 시각 필터링) | - |
-| GET | /api/sensors/:id/depths | 깊이 목록 | - |
-| PATCH | /api/sensors/:id | 센서 정보 수정 (formula_params, correction_params, depth_criteria 포함) | JWT + NonMultiMonitor |
-| PATCH | /api/sensors/:id/threshold | 임계값 수정 | JWT + NonMultiMonitor |
+| GET | /api/sensors/:id | 센서 상세 조회 (has_floor_plan, has_site_floor_plan, sensor_positions, depth_criteria 포함) | - |
+| PATCH | /api/sensors/:id/threshold | 센서 임계값 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
+| PATCH | /api/sensors/:id | 센서 정보 수정 (formula_params, correction_params, depth_criteria 포함) | JWT + NonMultiMonitor |
+
+| GET | /api/sensors/:id/measurements | 센서 측정값 조회 (from/to 시간 포함 시 정확한 시각 필터링) | - |
+| GET | /api/sensors/:id/depths | 센서 깊이 목록 목록(80053 전용) | - |
+| POST | /api/ingest | 센서 데이터 수신 (depthLabel 문자열 강제 변환) | API Key |
+
 | POST | /api/sensors/:id/floor-plan | 평면도 업로드 → 해당 센서의 현장(sites)에 저장 | JWT + NonMultiMonitor |
 | GET | /api/sensors/:id/floor-plan-image | 센서 평면도 이미지 서빙 (현장 평면도 반환) | - |
-| POST | /api/ingest | 센서 데이터 수신 (depthLabel 문자열 강제 변환) | API Key |
-| GET | /api/alarms | 알람 목록 | - |
-| PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
-| GET | /api/dashboard | 대시보드 요약 | - |
-| GET | /api/sites | 현장 목록 (has_floor_plan boolean, sensor_positions 포함) | - |
-| POST | /api/sites | 현장 추가 | JWT + NonMultiMonitor |
-| PATCH | /api/sites/:id | 현장 수정 (이름/위치/설명/담당자만 — floor_plan_url 미포함) | JWT + NonMultiMonitor |
-| DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
 | POST | /api/sites/:id/floor-plan | 현장 평면도 업로드 (PDF→PNG 자동 변환, base64 DB 저장) | JWT + NonMultiMonitor |
 | GET | /api/sites/:id/floor-plan-image | 현장 평면도 이미지 서빙 | - |
 | PATCH | /api/sites/:id/sensor-positions | 센서 아이콘 위치 저장 | JWT + NonMultiMonitor |
-| GET | /api/users | 사용자 목록 | JWT + NonMultiMonitor |
+
+| GET | /api/alarms | 알람 목록 | - |
+| PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
+
+| GET | /api/dashboard | 대시보드 요약 | - |
+
+| GET | /api/sites | 현장 목록 조회 (has_floor_plan boolean, sensor_positions 포함) | - |
+| POST | /api/sites | 현장 추가 | JWT + NonMultiMonitor |
+| PATCH | /api/sites/:id | 현장 수정 (이름/위치/설명/담당자만 — floor_plan_url 미포함) | JWT + NonMultiMonitor |
+| DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
+
+| GET | /api/users | 전체 사용자 목록 | JWT + NonMultiMonitor |
 | GET | /api/users/list | 사용자 목록 (인증 없음) | - |
-| PATCH | /api/users/:id/edit | 사용자 수정 | JWT + NonMultiMonitor |
+| PATCH | /api/users/:id/edit | 사용자 정보 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/users/:id/password | 비밀번호 변경 | JWT (본인만) |
-| PATCH | /api/users/:id/deactivate | 비활성화 | JWT + NonMultiMonitor |
-| PATCH | /api/users/:id/activate | 활성화 | JWT + NonMultiMonitor |
-| DELETE | /api/users/:id | 삭제 | JWT + NonMultiMonitor |
-| GET | /api/formulas | 계산식 목록 | - |
-| POST | /api/formulas | 계산식 추가 | JWT + NonMultiMonitor |
-| PATCH | /api/formulas/:id | 계산식 수정 | JWT + NonMultiMonitor |
-| DELETE | /api/formulas/:id | 계산식 삭제 | JWT + NonMultiMonitor |
+| PATCH | /api/users/:id/deactivate | 사용자 비활성화 | JWT + NonMultiMonitor |
+| PATCH | /api/users/:id/activate | 사용자 활성화 | JWT + NonMultiMonitor |
+| DELETE | /api/users/:id | 사용자 삭제 | JWT + NonMultiMonitor |
+
 | GET | /api/files | 파일 목록 | JWT |
 | POST | /api/files/upload | 파일 업로드 | JWT |
 | GET | /api/files/:id/download | 다운로드 | JWT |
 | DELETE | /api/files/:id | 파일 삭제 | JWT |
+
 | POST | /api/recollect | 재수집 요청 등록 | JWT + NonMultiMonitor |
-| GET | /api/recollect | 재수집 요청 목록 | JWT |
+| GET | /api/recollect | 재수집 요청 목록 조회 | JWT |
 | GET | /api/recollect/pending | 처리 대기 요청 조회 (에이전트용) | API Key |
 | PATCH | /api/recollect/:id/done | 재수집 완료 처리 (에이전트용) | API Key |
 | DELETE | /api/recollect/:id | 재수집 요청 취소 | JWT |
+
 | POST | /api/agent/heartbeat | 에이전트 온라인 상태 보고 | API Key |
 | GET | /api/agent/status | 에이전트 상태 조회 | - |
+
+| GET | /api/formulas | 계산식 목록 | - |
+| POST | /api/formulas | 계산식 추가 | JWT + NonMultiMonitor |
+| PATCH | /api/formulas/:id | 계산식 수정 | JWT + NonMultiMonitor |
+| DELETE | /api/formulas/:id | 계산식 삭제 | JWT + NonMultiMonitor |
+
+
 | GET | /api/health | 헬스체크 | - |
 
 ## 🗄 데이터베이스 구조
