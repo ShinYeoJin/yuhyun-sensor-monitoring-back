@@ -1457,14 +1457,13 @@ pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS formula_id INTEGER`)
 
 pool.query(`
   INSERT INTO formulas (name, expression, variables, is_custom, is_active)
-  VALUES
-    ('Linear', 'G * (I - R) * K',
-     '{"G":"선형계수","I":"초기원시값(자동)","R":"현재원시값","K":"단위변환계수(psi→m)"}',
-     false, true),
-    ('Polynomial', '(A * R^2 + B * R + C) * K',
-     '{"A":"2차계수","B":"1차계수","C":"상수항","R":"현재원시값","K":"단위변환계수(psi→m)"}',
-     false, true)
-  ON CONFLICT DO NOTHING
+  VALUES ('Linear', 'G * (I - R) * K',
+    '{"G":"선형계수","I":"초기원시값(자동)","R":"현재원시값","K":"단위변환계수(psi→m)"}',
+    false, true),
+  ('Polynomial', '(A * R^2 + B * R + C) * K',
+    '{"A":"2차계수","B":"1차계수","C":"상수항","R":"현재원시값","K":"단위변환계수(psi→m)"}',
+    false, true)
+  ON CONFLICT (name) DO NOTHING
 `).then(() => console.log('[DB] 기본 계산식(Linear/Polynomial) 확인 완료'))
   .catch(err => console.error('[DB] 기본 계산식 등록 오류:', err.message))
 
