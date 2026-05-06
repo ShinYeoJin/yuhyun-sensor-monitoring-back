@@ -1428,6 +1428,36 @@ pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS depth_criteria JSONB`)
   .then(() => console.log('[DB] sensors.depth_criteria 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
+// Phase 1: 계산식 일반화 마이그레이션
+pool.query(`ALTER TABLE formulas ADD COLUMN IF NOT EXISTS expression TEXT`)
+  .then(() => console.log('[DB] formulas.expression 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`ALTER TABLE formulas ADD COLUMN IF NOT EXISTS variables JSONB`)
+  .then(() => console.log('[DB] formulas.variables 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`ALTER TABLE formulas ADD COLUMN IF NOT EXISTS is_custom BOOLEAN DEFAULT false`)
+  .then(() => console.log('[DB] formulas.is_custom 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS formula_id INTEGER`)
+  .then(() => console.log('[DB] sensors.formula_id 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
+
+pool.query(`
+  INSERT INTO formulas (name, expression, variables, is_custom, is_active)
+  VALUES
+    ('Linear', 'G * (I - R) * K',
+     '{"G":"선형계수","I":"초기원시값(자동)","R":"현재원시값","K":"단위변환계수(psi→m)"}',
+     false, true),
+    ('Polynomial', '(A * R^2 + B * R + C) * K',
+     '{"A":"2차계수","B":"1차계수","C":"상수항","R":"현재원시값","K":"단위변환계수(psi→m)"}',
+     false, true)
+  ON CONFLICT DO NOTHING
+`).then(() => console.log('[DB] 기본 계산식(Linear/Polynomial) 확인 완료'))
+  .catch(err => console.error('[DB] 기본 계산식 등록 오류:', err.message))
+
 pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
   .then(() => console.log('[DB] sites.floor_plan_url 컬럼 확인 완료'))
   .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
