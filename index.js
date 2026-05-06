@@ -1,6 +1,30 @@
 require('dotenv').config()
 const { pdfToPng } = require('pdf-to-png-converter')
+const { evaluate: mathEvaluate } = require('mathjs')
 const express  = require('express')
+
+// ─── 공통 계산 함수 ───────────────────────────────────────────────────────────
+function calculateValue(expression, params) {
+  if (!expression || !params) return null
+  try {
+    const result = mathEvaluate(expression, params)
+    if (!isFinite(result) || isNaN(result)) return null
+    return parseFloat(result.toFixed(4))
+  } catch (err) { return null }
+}
+
+function applyFormula(rawValue, initRawValue, formulaExpression, formulaParams, depthKey) {
+  if (!formulaExpression || rawValue === null || rawValue === undefined) return null
+  let params = formulaParams || {}
+  if (depthKey && params[depthKey] && typeof params[depthKey] === 'object') {
+    params = params[depthKey]
+  }
+  return calculateValue(formulaExpression, {
+    R: parseFloat(rawValue),
+    I: initRawValue !== null && initRawValue !== undefined ? parseFloat(initRawValue) : parseFloat(rawValue),
+    ...params
+  })
+}
 const cors     = require('cors')
 const { Pool } = require('pg')
 const jwt      = require('jsonwebtoken')
@@ -855,22 +879,28 @@ app.get('/api/sensors', async (req, res) => {
       LEFT JOIN sites si ON s.site_id = si.id
       ${where} ORDER BY s.id`, params)
 
-    const result = await Promise.all(rows.map(async (s) => {
-      if (s.sensor_code === '80053' && s.current_value !== null) {
-        const initRow = await pool.query(
-          `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label='1' ORDER BY measured_at ASC LIMIT 1`,
-          [s.id])
-        if (initRow.rows.length > 0) {
-          const raw = parseFloat(s.current_value)
-          const initRaw = parseFloat(initRow.rows[0].value)
-          // Linear (메인)
-          const G = 0.012044
-          const linearM = parseFloat((G * (initRaw - raw) * 0.70307).toFixed(4))
-          return { ...s, current_value: linearM }
+      const result = await Promise.all(rows.map(async (s) => {
+        if (s.formula_params && s.current_value !== null) {
+          try {
+            const fp = s.formula_params
+            const isDepthParams = fp['1'] || fp['2'] || fp['3']
+            const params = isDepthParams ? (fp['1'] || fp['2'] || fp['3']) : fp
+            if (params.G !== undefined && params.K !== undefined) {
+              const depthCond = isDepthParams ? `AND depth_label='1'` : `AND depth_label IS NULL`
+              const initRow = await pool.query(
+                `SELECT value FROM measurements WHERE sensor_id=$1 ${depthCond} ORDER BY measured_at ASC LIMIT 1`,
+                [s.id])
+              if (initRow.rows.length > 0) {
+                const raw = parseFloat(s.current_value)
+                const initRaw = parseFloat(initRow.rows[0].value)
+                const computed = applyFormula(raw, initRaw, 'G * (I - R) * K', params, null)
+                if (computed !== null) return { ...s, current_value: computed }
+              }
+            }
+          } catch (e) { }
         }
-      }
-      return s
-    }))
+        return s
+      }))
     res.json(result)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -892,11 +922,24 @@ app.get('/api/sensors/:id', async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' })
     const sensor = rows[0]
 
-    if (sensor.sensor_code === '80053' && sensor.current_value !== null) {
-      const raw = parseFloat(sensor.current_value)
-      // Polynomial (메인)
-      const A = 7.080e-8, B = -0.012296, C = 106.0458
-      sensor.current_value = parseFloat(((A * raw * raw + B * raw + C) * 0.70307).toFixed(4))
+    if (sensor.formula_params && sensor.current_value !== null) {
+      try {
+        const fp = sensor.formula_params
+        const isDepthParams = fp['1'] || fp['2'] || fp['3']
+        const params = isDepthParams ? (fp['1'] || Object.values(fp)[0]) : fp
+        if (params.G !== undefined && params.K !== undefined) {
+          const depthCond = isDepthParams ? `AND depth_label='1'` : `AND depth_label IS NULL`
+          const initRow = await pool.query(
+            `SELECT value FROM measurements WHERE sensor_id=$1 ${depthCond} ORDER BY measured_at ASC LIMIT 1`,
+            [sensor.id])
+          if (initRow.rows.length > 0) {
+            const raw = parseFloat(sensor.current_value)
+            const initRaw = parseFloat(initRow.rows[0].value)
+            const computed = applyFormula(raw, initRaw, 'G * (I - R) * K', params, null)
+            if (computed !== null) sensor.current_value = computed
+          }
+        }
+      } catch (e) { }
     }
     res.json(sensor)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -906,7 +949,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
   const { name, manage_no, sensor_type, unit, field, formula,
     level1_upper, level1_lower, level2_upper, level2_lower,
     criteria_unit, criteria_unit_name, install_date, location_desc,
-    formula_params, correction_params, depth_criteria } = req.body
+    formula_params, correction_params, depth_criteria, formula_id } = req.body
   try {
     const fields = []
     const values = []
@@ -916,6 +959,7 @@ app.patch('/api/sensors/:id', requireAuth, requireRole(NON_MULTIMONITOR), async 
     if (sensor_type !== undefined)        { fields.push(`sensor_type=$${idx++}`);        values.push(sensor_type) }
     if (unit !== undefined)               { fields.push(`unit=$${idx++}`);               values.push(unit) }
     if (field !== undefined)              { fields.push(`field=$${idx++}`);              values.push(field) }
+    if (formula_id !== undefined)         { fields.push(`formula_id=$${idx++}`);         values.push(formula_id) }
     if (formula !== undefined)            { fields.push(`formula=$${idx++}`);            values.push(formula) }
     if (level1_upper !== undefined)       { fields.push(`level1_upper=$${idx++}`);       values.push(level1_upper) }
     if (level1_lower !== undefined)       { fields.push(`level1_lower=$${idx++}`);       values.push(level1_lower) }
@@ -996,45 +1040,29 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT m.measured_at, m.value, m.depth_label, m.value AS raw_value FROM measurements m ${where} ORDER BY m.measured_at ASC LIMIT $${params.length}`, params)
 
-    // 80053 계산식 적용 (Polynomial 메인, Linear 서브 둘 다 반환)
-    if (is80053 && rows.length > 0) {
-      // 날짜 범위와 무관하게 해당 depth의 전체 기간 첫 번째 raw값을 initRaw로 사용
+    // 일반화된 계산식 적용 (formula_params가 있는 센서)
+    if (sensor.formula_params && rows.length > 0) {
+      const fp = sensor.formula_params
+      const isDepthParams = fp['1'] || fp['2'] || fp['3']
       const currentDepth = rows[0].depth_label
+      const params = isDepthParams ? (fp[currentDepth] || fp['1'] || fp) : fp
+      const depthCond = currentDepth ? `AND depth_label=$2` : `AND depth_label IS NULL`
+      const initArgs = currentDepth ? [req.params.id, currentDepth] : [req.params.id]
       const initRow = await pool.query(
-        `SELECT value FROM measurements WHERE sensor_id=$1 AND depth_label=$2 ORDER BY measured_at ASC LIMIT 1`,
-        [req.params.id, currentDepth]
-      )
+        `SELECT value FROM measurements WHERE sensor_id=$1 ${depthCond} ORDER BY measured_at ASC LIMIT 1`,
+        initArgs)
       const initRaw = initRow.rows.length > 0 ? parseFloat(initRow.rows[0].value) : parseFloat(rows[0].value)
+      const hasLinear = params.G !== undefined && params.K !== undefined
+      const hasPoly = params.A !== undefined && params.B !== undefined && params.C !== undefined && params.K !== undefined
       const converted = rows.map(r => {
         const raw = parseFloat(r.value)
-        const dl = r.depth_label
-
-        // Polynomial 계수 (수정된 B값)
-        const A = dl === '1' ? 7.080e-8  : 1.429e-7
-        const B = dl === '1' ? -0.012296 : -0.015320
-        const C = dl === '1' ? 106.0458  : 118.4773
-
-        // Linear 계수
-        const G = dl === '1' ? 0.012044 : 0.013450
-
-        // Polynomial
-        const polyPsi = A * raw * raw + B * raw + C
-        const polyM   = parseFloat((polyPsi * 0.70307).toFixed(4))
-
-        // Linear
-        const linearPsi = G * (initRaw - raw)
-        const linearM   = parseFloat((linearPsi * 0.70307).toFixed(4))
-
-        return {
-          ...r,
-          value: polyM,
-          linear_value: linearM,
-          raw_value: raw,
-        }
+        const depthParams = isDepthParams ? (fp[r.depth_label] || params) : params
+        const linearVal = hasLinear ? applyFormula(raw, initRaw, 'G * (I - R) * K', depthParams, null) : null
+        const polyVal = hasPoly ? applyFormula(raw, initRaw, '(A * R^2 + B * R + C) * K', depthParams, null) : null
+        return { ...r, value: polyVal ?? linearVal ?? raw, linear_value: linearVal, raw_value: raw }
       })
       return res.json(converted)
     }
-
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
