@@ -1046,20 +1046,29 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
       const fp = sensor.formula_params
       const isDepthParams = fp['1'] || fp['2'] || fp['3']
       const currentDepth = rows[0].depth_label
-      const params = isDepthParams ? (fp[currentDepth] || fp['1'] || fp) : fp
+      const formulaParams = isDepthParams ? (fp[currentDepth] || fp['1'] || fp) : fp
+    
       const depthCond = currentDepth ? `AND depth_label=$2` : `AND depth_label IS NULL`
       const initArgs = currentDepth ? [req.params.id, currentDepth] : [req.params.id]
       const initRow = await pool.query(
         `SELECT value FROM measurements WHERE sensor_id=$1 ${depthCond} ORDER BY measured_at ASC LIMIT 1`,
         initArgs)
       const initRaw = initRow.rows.length > 0 ? parseFloat(initRow.rows[0].value) : parseFloat(rows[0].value)
-      const hasLinear = params.G !== undefined && params.K !== undefined
-      const hasPoly = params.A !== undefined && params.B !== undefined && params.C !== undefined && params.K !== undefined
+    
+      const hasLinear = formulaParams.G !== undefined && formulaParams.K !== undefined
+      const hasPoly = formulaParams.A !== undefined && formulaParams.B !== undefined && formulaParams.C !== undefined && formulaParams.K !== undefined
+    
       const converted = rows.map(r => {
         const raw = parseFloat(r.value)
-        const depthParams = isDepthParams ? (fp[r.depth_label] || params) : params
-        const linearVal = hasLinear ? applyFormula(raw, initRaw, 'G * (I - R) * K', depthParams, null) : null
-        const polyVal = hasPoly ? applyFormula(raw, initRaw, '(A * R^2 + B * R + C) * K', depthParams, null) : null
+        const rowFormulaParams = isDepthParams ? (fp[r.depth_label] || formulaParams) : formulaParams
+    
+        const linearVal = hasLinear
+          ? applyFormula(raw, initRaw, 'G * (I - R) * K', rowFormulaParams, null)
+          : null
+        const polyVal = hasPoly
+          ? applyFormula(raw, initRaw, '(A * R^2 + B * R + C) * K', rowFormulaParams, null)
+          : null
+    
         return { ...r, value: polyVal ?? linearVal ?? raw, linear_value: linearVal, raw_value: raw }
       })
       return res.json(converted)
