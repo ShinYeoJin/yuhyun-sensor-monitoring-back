@@ -1008,8 +1008,9 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
     }
 
     const sensorCheck = await pool.query(
-      `SELECT sensor_code FROM sensors WHERE id=$1`, [req.params.id])
+      `SELECT sensor_code, formula_params FROM sensors WHERE id=$1`, [req.params.id])
     const is80053 = sensorCheck.rows.length > 0 && sensorCheck.rows[0].sensor_code === '80053'
+    const sensor = sensorCheck.rows.length > 0 ? sensorCheck.rows[0] : null
 
     if (depthLabel) {
       params.push(depthLabel)
