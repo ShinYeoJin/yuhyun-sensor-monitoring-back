@@ -1053,7 +1053,11 @@ app.get('/api/sensors/:id/measurements', async (req, res) => {
       const initRow = await pool.query(
         `SELECT value FROM measurements WHERE sensor_id=$1 ${depthCond} ORDER BY measured_at ASC LIMIT 1`,
         initArgs)
-      const initRaw = initRow.rows.length > 0 ? parseFloat(initRow.rows[0].value) : parseFloat(rows[0].value)
+      // formula_params에 수동 I값이 있으면 우선 사용
+      const manualI = formulaParams?.I
+      const initRaw = manualI !== undefined
+        ? manualI
+        : (initRow.rows.length > 0 ? parseFloat(initRow.rows[0].value) : parseFloat(rows[0].value))
     
       const hasLinear = formulaParams.G !== undefined && formulaParams.K !== undefined
       const hasPoly = formulaParams.A !== undefined && formulaParams.B !== undefined && formulaParams.C !== undefined && formulaParams.K !== undefined
