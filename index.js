@@ -870,10 +870,10 @@ app.get('/api/sensors', async (req, res) => {
     if (status) { params.push(status); where += ` AND ss.status = $${params.length}` }
     const { rows } = await pool.query(`
       SELECT s.id, s.sensor_code, s.manage_no, s.name, s.sensor_type, s.unit, s.field,
-             s.location_desc, s.install_date, s.threshold_normal_max, s.threshold_warning_max, s.threshold_danger_min,
-             ss.current_value, ss.status, ss.last_measured, si.name AS site_name, si.site_code,
-             s.level1_upper, s.level1_lower, s.level2_upper, s.level2_lower,
-             s.criteria_unit, s.criteria_unit_name, s.formula, s.depth_criteria
+       s.location_desc, s.install_date, s.threshold_normal_max, s.threshold_warning_max, s.threshold_danger_min,
+       ss.current_value, ss.status, ss.last_measured, si.name AS site_name, si.site_code,
+       s.level1_upper, s.level1_lower, s.level2_upper, s.level2_lower,
+       s.criteria_unit, s.criteria_unit_name, s.formula, s.depth_criteria, s.formula_params
       FROM sensors s
       LEFT JOIN sensor_status ss ON s.id = ss.sensor_id
       LEFT JOIN sites si ON s.site_id = si.id
