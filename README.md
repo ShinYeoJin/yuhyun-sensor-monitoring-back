@@ -57,33 +57,26 @@ PORT=4000
 | POST | /api/auth/login | 로그인 | - |
 | POST | /api/auth/logout | 로그아웃 | JWT |
 | GET | /api/auth/me | 내 정보 (토큰 유효성 검증용) | JWT |
-
 | GET | /api/sensors | 센서 목록 (formula_params 기반 계산값 반환) | - |
-| GET | /api/sensors/:id | 센서 상세 조회 (formula_params 기반 current_value, has_floor_plan, sensor_positions, depth_criteria 포함) | - |
+| GET | /api/sensors/:id | 센서 상세 (current_value, has_floor_plan, sensor_positions, depth_criteria 포함) | - |
 | PATCH | /api/sensors/:id/threshold | 센서 임계값 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id/site | 센서 소속 현장 변경 | JWT + NonMultiMonitor |
 | PATCH | /api/sensors/:id | 센서 정보 수정 (formula_params, correction_params, depth_criteria, formula_id 포함) | JWT + NonMultiMonitor |
-
 | GET | /api/sensors/:id/measurements | 센서 측정값 조회 (formula_params 기반 계산, from/to 시간 포함 시 정확한 시각 필터링) | - |
 | GET | /api/sensors/:id/depths | 센서 깊이 목록 (80053 전용) | - |
 | POST | /api/ingest | 센서 데이터 수신 (depthLabel 문자열 강제 변환) | API Key |
-
 | POST | /api/sensors/:id/floor-plan | 평면도 업로드 → 해당 센서의 현장(sites)에 저장 | JWT + NonMultiMonitor |
 | GET | /api/sensors/:id/floor-plan-image | 센서 평면도 이미지 서빙 (현장 평면도 반환) | - |
 | POST | /api/sites/:id/floor-plan | 현장 평면도 업로드 (PDF→PNG 자동 변환, base64 DB 저장) | JWT + NonMultiMonitor |
 | GET | /api/sites/:id/floor-plan-image | 현장 평면도 이미지 서빙 | - |
 | PATCH | /api/sites/:id/sensor-positions | 센서 아이콘 위치 저장 | JWT + NonMultiMonitor |
-
 | GET | /api/alarms | 알람 목록 | - |
 | PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
-
 | GET | /api/dashboard | 대시보드 요약 | - |
-
 | GET | /api/sites | 현장 목록 조회 (has_floor_plan boolean, sensor_positions 포함) | - |
 | POST | /api/sites | 현장 추가 | JWT + NonMultiMonitor |
 | PATCH | /api/sites/:id | 현장 수정 (이름/위치/설명/담당자만 — floor_plan_url 미포함) | JWT + NonMultiMonitor |
 | DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
-
 | GET | /api/users | 전체 사용자 목록 | JWT + NonMultiMonitor |
 | GET | /api/users/list | 사용자 목록 (인증 없음) | - |
 | PATCH | /api/users/:id/edit | 사용자 정보 수정 | JWT + NonMultiMonitor |
@@ -91,26 +84,21 @@ PORT=4000
 | PATCH | /api/users/:id/deactivate | 사용자 비활성화 | JWT + NonMultiMonitor |
 | PATCH | /api/users/:id/activate | 사용자 활성화 | JWT + NonMultiMonitor |
 | DELETE | /api/users/:id | 사용자 삭제 | JWT + NonMultiMonitor |
-
 | GET | /api/files | 파일 목록 | JWT |
 | POST | /api/files/upload | 파일 업로드 | JWT |
 | GET | /api/files/:id/download | 다운로드 | JWT |
 | DELETE | /api/files/:id | 파일 삭제 | JWT |
-
 | POST | /api/recollect | 재수집 요청 등록 | JWT + NonMultiMonitor |
 | GET | /api/recollect | 재수집 요청 목록 조회 | JWT |
 | GET | /api/recollect/pending | 처리 대기 요청 조회 (에이전트용) | API Key |
 | PATCH | /api/recollect/:id/done | 재수집 완료 처리 (에이전트용) | API Key |
 | DELETE | /api/recollect/:id | 재수집 요청 취소 | JWT |
-
 | POST | /api/agent/heartbeat | 에이전트 온라인 상태 보고 | API Key |
 | GET | /api/agent/status | 에이전트 상태 조회 | - |
-
 | GET | /api/formulas | 계산식 목록 (expression, variables, is_custom 포함) | - |
 | POST | /api/formulas | 계산식 추가 | JWT + NonMultiMonitor |
 | PATCH | /api/formulas/:id | 계산식 수정 | JWT + NonMultiMonitor |
 | DELETE | /api/formulas/:id | 계산식 삭제 (is_active=false) | JWT + NonMultiMonitor |
-
 | GET | /api/health | 헬스체크 | - |
 
 ## 🗄 데이터베이스 구조
@@ -119,8 +107,8 @@ sites               - 현장 정보 (managers 컬럼 포함)
 sensors             - 센서 정보 (임계값, formula, level1_upper, level1_lower,
                       level2_upper, level2_lower, criteria_unit, criteria_unit_name 포함)
 formulas            - 계산식 목록 (name UNIQUE, expression, variables, is_custom, is_active)
-measurements        - 측정값 누적 데이터
-                      (value: Polynomial 계산값, linear_value: Linear 계산값, raw_value: 원시값)
+measurements        - 측정값 누적 데이터 (id, sensor_id, measured_at, value, depth_label, raw_file, created_at)
+                      ※ linear_value, raw_value 컬럼 없음 — API에서 계산 후 반환
 sensor_status       - 센서 현재 상태
 alarm_events        - 알람 발생 이력
 users               - 사용자 정보 (phone 컬럼 포함)
@@ -129,26 +117,24 @@ recollect_requests  - 재수집 요청 이력 (최초 호출 시 자동 생성)
 agent_status        - 에이전트 상태 (최초 호출 시 자동 생성)
 
 sensors 테이블 추가 컬럼 (자동 마이그레이션):
-- floor_plan_url:    센서별 평면도 (base64, 미사용 → 현장 평면도로 통일)
-- formula_params:    계산식 계수값 (JSONB) — v1.5.0 구조 변경
-  신규 구조: { "1": {"G":0.012044,"K":0.703,"A":7.08e-8,...}, "2":{...}, "3":{...} }
+- formula_params:    계산식 계수값 (JSONB)
+  신규 구조: { "1": {"G":0.012044,"K":0.703,"A":7.08e-8,"B":-0.012296,"C":106.0458,"I":8184.18}, ... }
   구구조 (호환): { "coeffA": "7.08e-8", "coeffG": "0.012044", "initVal": "8184.18", ... }
-- formula_id:        연결된 계산식 ID (INTEGER) — v1.5.0 신규
-- correction_params: depth별 보정값 (JSONB)
-  예: { "1": 0.5, "2": -0.3, "3": 0.0 }
-- depth_criteria:    depth별 1차 관리기준 상하한 (JSONB)
-  예: { "1": { "upper": -1.0, "lower": -5.0 }, "2": { "upper": -2.0, "lower": -6.0 } }
+- formula_id:        연결된 계산식 ID (INTEGER)
+- correction_params: depth별 보정값 (JSONB) 예: { "1": 0.5, "2": -0.3, "3": 0.0 }
+- depth_criteria:    depth별 1차 관리기준 (JSONB) 예: { "1": { "upper": -1.0, "lower": -5.0 }, ... }
+- floor_plan_url:    센서별 평면도 (미사용 → 현장 평면도로 통일)
 
-formulas 테이블 추가 컬럼 (자동 마이그레이션 — v1.5.0):
+formulas 테이블 추가 컬럼 (자동 마이그레이션):
 - expression:  수식 문자열 (TEXT) 예: "G * (I - R) * K"
 - variables:   변수 설명 (JSONB) 예: {"G":"선형계수","R":"현재원시값"}
 - is_custom:   유저 직접 입력 여부 (BOOLEAN DEFAULT false)
-※ name 컬럼 UNIQUE 제약 추가 필요 (DBeaver 직접 실행):
+※ name 컬럼 UNIQUE 제약 (DBeaver 직접 실행):
   ALTER TABLE formulas ADD CONSTRAINT formulas_name_unique UNIQUE (name);
 
 sites 테이블 추가 컬럼 (자동 마이그레이션):
 - floor_plan_url:    현장별 평면도 (base64, PNG/JPG로 변환 저장)
-                     ※ PATCH /api/sites/:id 로는 절대 변경되지 않음 (전용 API로만 업데이트)
+                     ※ PATCH /api/sites/:id 로는 절대 변경되지 않음
 - sensor_positions:  센서 아이콘 위치 및 이름 (JSONB)
   예: { "7:1": { "label": "WL-01", "x": 0.3, "y": 0.5 } }
 ```
@@ -161,13 +147,9 @@ sites 테이블 추가 컬럼 (자동 마이그레이션):
 업로드 흐름:
   센서 상세 페이지 업로드 → POST /api/sensors/:id/floor-plan
     → 해당 센서의 site_id로 sites.floor_plan_url에 저장
-
   현장 편집 모달/현장 상세 페이지 업로드 → POST /api/sites/:id/floor-plan
     → sites.floor_plan_url에 저장
-
-  ※ 현장 추가 모달에서는 업로드 불가 (siteId 없음), 추가 후 편집에서 업로드
-  ※ PATCH /api/sites/:id (현장 편집 저장)는 floor_plan_url을 건드리지 않음
-     → 현장 편집 저장 시 평면도가 삭제되지 않음
+  ※ PATCH /api/sites/:id (현장 편집 저장)는 floor_plan_url 미변경
 
 이미지 서빙:
   GET /api/sensors/:id/floor-plan-image → 해당 센서의 현장 평면도 반환
@@ -175,47 +157,34 @@ sites 테이블 추가 컬럼 (자동 마이그레이션):
 
 PDF 자동 변환:
   업로드 파일이 application/pdf인 경우 pdf-to-png-converter로
-  첫 페이지 PNG 변환 후 저장 → 모든 브라우저에서 img 태그로 표시 가능
+  첫 페이지 PNG 변환 후 저장
 ```
 
 ## 📐 1차 관리기준 구조
 
 ```
-일반 센서:
-  sensors.level1_upper / sensors.level1_lower 컬럼 사용
-  PATCH /api/sensors/:id 로 저장
-
-80053 수위계 (depth별 개별 설정):
-  sensors.depth_criteria JSONB 컬럼 사용
-  PATCH /api/sensors/:id { depth_criteria: { "1": { upper, lower }, "2": {...}, "3": {...} } }
-  depth 전환 시 해당 depth의 기준값을 그래프·측정값·엑셀·PDF에 즉시 반영
-
-※ 자동계산(초기값 ± 4m) 방식 폐기 → 관리자 직접 입력 방식으로 전환
+일반 센서: sensors.level1_upper / sensors.level1_lower 컬럼 사용
+80053 수위계: sensors.depth_criteria JSONB 컬럼 사용
+  { "1": { upper, lower }, "2": {...}, "3": {...} }
+※ 자동계산 방식 폐기 → 관리자 직접 입력 방식
 ```
 
-## 🔢 계산식 일반화 — v1.5.0
+## 🔢 계산식 일반화 (v1.5.0)
 
 ### 공통 계산 함수
-
 ```js
-// calculateValue(expression, params)
-// - mathjs evaluate() 사용
-// - 0나누기/NaN/Infinity → null 반환, try-catch 에러 처리
-
+// calculateValue(expression, params) — mathjs evaluate() 사용, 에러 시 null 반환
 // applyFormula(rawValue, initRawValue, expression, formulaParams, depthKey)
-// - depth별 파라미터 자동 선택
-// - 변수: R(원시값), I(초기값), G, A, B, C, K
+//   — depth별 파라미터 자동 선택, 변수: R(원시값), I(초기값), G, A, B, C, K
 ```
 
 ### 기본 계산식 (formulas 테이블 자동 등록)
-
-| 이름 | 수식 | 용도 |
-|------|------|------|
-| Linear | `G * (I - R) * K` | 선형 계산 |
-| Polynomial | `(A * R^2 + B * R + C) * K` | 다항식 계산 |
+| 이름 | 수식 |
+|------|------|
+| Linear | `G * (I - R) * K` |
+| Polynomial | `(A * R^2 + B * R + C) * K` |
 
 ### measurements API 반환 구조
-
 ```js
 {
   value: polyVal ?? linearVal ?? raw,  // Poly 우선, 없으면 Linear, 없으면 raw
@@ -224,53 +193,46 @@ PDF 자동 변환:
 }
 ```
 
-### ⚠️ params 변수명 충돌 주의
+### sensors 목록 API current_value 계산 (v1.6.0 수정)
+- `SELECT`에 `s.formula_params` 포함 필수 (누락 시 raw값 그대로 반환되는 버그 수정)
+- Linear 계산값으로 반환 (80053 기준)
 
-measurements API에서 SQL params 배열과 formula params 객체의 변수명이 반드시 달라야 함:
-- SQL params 배열: `params` (쿼리 파라미터)
-- formula params 객체: `formulaParams`, `rowFormulaParams` (충돌 방지)
+### I(초기값) 처리
+- formula_params에 `I` 키로 저장된 경우 해당 값을 initRawValue로 우선 사용
+- 없으면 measurements 테이블에서 가장 오래된 데이터의 value를 initRawValue로 사용
 
-### 80053 formula_params DB 저장 (DBeaver에서 직접 실행)
-
+### 80053 formula_params DB 저장 (DBeaver)
 ```sql
 UPDATE sensors
 SET formula_params = '{
   "1": {"G": 0.012044, "K": 0.703, "A": 7.08e-8, "B": -0.012296, "C": 106.0458},
-  "2": {"G": 0.013450, "K": 0.703, "A": 1.429e-7, "B": -0.015320, "C": 118.4773},
-  "3": {"G": 0.013450, "K": 0.703, "A": 1.429e-7, "B": -0.015320, "C": 118.4773}
+  "2": {"G": 0.013450, "K": 0.703, "A": 1.429e-7, "B": -0.01532, "C": 118.4773},
+  "3": {"G": 0.013450, "K": 0.703, "A": 1.429e-7, "B": -0.01532, "C": 118.4773}
 }'::jsonb
 WHERE sensor_code = '80053';
 ```
 
-## 🔢 80053 수위계 계산식 (v1.5.0 일반화 이전 하드코딩 방식 참고용)
+### ⚠️ params 변수명 충돌 주의
+measurements API에서 SQL params 배열과 formula params 객체 변수명이 반드시 달라야 함:
+- SQL params 배열: `params`
+- formula params 객체: `formulaParams`, `rowFormulaParams`
+
+## 🔢 80053 수위계 계산식 (참고)
 
 ### Linear (메인) — linear_value 필드
 ```
 P(psi) = G × (초기값 - 현재값)
 P(m) = P(psi) × 0.70307
-
-depth_label 1번: G=0.012044
-depth_label 2,3번: G=0.013450
+depth 1번: G=0.012044 / depth 2,3번: G=0.013450
 ```
 
 ### Polynomial (서브) — value 필드
 ```
 P(psi) = A × R² + B × R + C
 P(m) = P(psi) × 0.70307
-
-depth_label 1번 (302555): A=7.080E-08, B=-0.012296, C=106.0458
-depth_label 2,3번 (302554): A=1.429E-07, B=-0.015320, C=118.4773
-온도 보정 K=0 처리
+depth 1번: A=7.08e-8, B=-0.012296, C=106.0458
+depth 2,3번: A=1.429e-7, B=-0.015320, C=118.4773
 ```
-
-### current_value 반환 기준
-- `GET /api/sensors` 및 `GET /api/sensors/:id` 에서 formula_params가 있는 센서의 `current_value`는
-  **Linear(메인) 계산값**으로 반환 (depth_label 1번 기준)
-
-### measurements API 시간 필터링
-- `from`, `to` 파라미터에 `T`가 포함된 경우 (예: `2026-04-22T16:00:00`) 해당 시각 그대로 사용
-- `T`가 없는 경우 (예: `2026-04-22`) 자동으로 `T00:00:00+09:00`, `T23:59:59+09:00` 추가
-- 일별 특정 시각 조회 시 프론트에서 `T` 포함 형식으로 전달
 
 ## 🤖 에이전트 v2.1 (+ 패치)
 
@@ -282,41 +244,29 @@ C:\geomonitor-agent\
 ├── package.json
 ├── .env
 ├── .last_sent.json   # 마지막 전송 시간 추적
-└── .known_folders.json # 알려진 센서 폴더 목록
+└── .known_folders.json
 ```
 
 ### v2.1 기능
-- **Heartbeat**: 5분마다 백엔드에 온라인 상태 전송 → 재수집 탭에서 에이전트 온라인/오프라인 확인 가능
+- **Heartbeat**: 5분마다 온라인 상태 전송
 - **재수집 폴링**: 매 실행마다 pending 재수집 요청 확인 후 처리
-- **80053 비정상 데이터 필터링**: sendBatch에서 value < 100 데이터 전송 제외
+- **80053 비정상 데이터 필터링**: value < 100 데이터 전송 제외
 
 ### v2.1 패치 — 데이터 누락 방지
 - **filterNew() 48시간 안전망**: 항상 최근 48시간 데이터 재확인
-  ```js
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-  const safeFrom = lastSent < cutoff ? lastSent : cutoff
-  ```
 - **processRecollectRequests() last_sent 업데이트 제거**: 재수집이 정기 전송의 last_sent를 덮어쓰지 않음
-  - 재수집 후에도 정기 전송 데이터 누락 없음
 
 ### 에이전트 실행 (pm2)
 ```powershell
-cd C:\geomonitor-agent
 pm2 start agent.js --name geomonitor-agent
 pm2 save
 pm2 logs geomonitor-agent
 pm2 status
 ```
 
-### Windows 자동 실행 설정
-- Windows 작업 스케줄러로 PC 로그인 시 pm2 자동 실행 설정 완료 (2026.04.09)
-- PC 재시작 후 별도 터미널 명령어 입력 불필요
-- `pm2 status` 명령어로 실행 상태 확인 가능
-
-### 새 센서 자동 감지 및 반자동 등록
-- 에이전트가 기존에 없던 새 센서 파일 감지 시 자동으로 DB 등록
-- 자동 등록 임시값: 관리번호 `MN-AUTO-{센서코드}`, 센서 종류 `unknown`, 단위 `-`
-- 이후 관리자가 센서 관리 → 센서 정의 탭 → 편집 버튼에서 수동으로 정보 수정 필요
+### Windows 자동 실행
+- Windows 작업 스케줄러로 PC 로그인 시 pm2 자동 실행 설정 완료
+- 새 센서 자동 감지 시 DB 임시값으로 등록 → 관리자가 센서 정의 탭에서 수정
 
 ## 📌 버전
 
@@ -326,17 +276,20 @@ pm2 status
 - **v1.3.0** (2026.04.22) — 평면도 현장 단위 통일, PDF→PNG 자동 변환 (pdf-to-png-converter), 평면도 이미지 서빙 API 분리, sensor_positions API 추가, measurements 시간 필터링 정확도 개선
 - **v1.4.0** (2026.04.23) — depth_criteria JSONB 컬럼 추가, PATCH /api/sensors/:id depth_criteria 지원, 1차 관리기준 자동계산 폐기(직접 입력 방식 전환)
 - **v1.4.1** (2026.04.24) — PATCH /api/sites/:id에서 floor_plan_url 업데이트 제거 (현장 편집 저장 시 평면도 삭제 버그 수정)
-- **v1.5.0** (2026.05.04~06) — 계산식 일반화 Phase 1
+- **v1.5.0** (2026.05.04~06) — 계산식 일반화
   - mathjs 도입 (`"mathjs": "^13.0.0"` package.json 명시 필수)
-  - calculateValue / applyFormula 공통 함수 추가 (에러 시 null 반환, 0나누기/NaN 처리)
+  - calculateValue / applyFormula 공통 함수 추가
   - formulas 테이블: expression, variables, is_custom 컬럼 추가
-  - formulas name UNIQUE 제약 추가 (DBeaver 직접 실행 필요)
-  - Linear/Polynomial 기본 계산식 서버 시작 시 자동 등록 (ON CONFLICT(name) DO NOTHING)
+  - formulas name UNIQUE 제약 추가
+  - Linear/Polynomial 기본 계산식 서버 시작 시 자동 등록
   - sensors 테이블: formula_id 컬럼 추가
   - sensors 목록/상세/measurements API 80053 하드코딩 → formula_params 기반 일반화
   - PATCH /api/sensors/:id formula_id 저장 지원
-  - **버그 수정**: measurements API SQL params 배열과 formulaParams 객체 변수명 충돌 수정 (formulaParams, rowFormulaParams로 변경)
+  - measurements API SQL params vs formulaParams 변수명 충돌 수정
   - 에이전트 v2.1 패치: filterNew() 48시간 안전망, processRecollectRequests() last_sent 업데이트 제거
+- **v1.6.0** (2026.05.07~08)
+  - **sensors 목록 쿼리에 formula_params 컬럼 추가**: current_value raw값 표시 버그 수정
+  - **formula_params에 I(초기값) 저장 지원**: measurements API에서 formula_params.I 우선 사용
 
 ## ⚠️ 주의사항
 
@@ -346,40 +299,36 @@ pm2 status
 - 최소 1개 이상의 관리자 계정을 항상 유지할 것
 
 ### 파일 저장
-- Render 특성상 서버 재시작 시 업로드된 파일이 삭제될 수 있음
+- Render 특성상 서버 재시작 시 업로드된 파일 삭제 가능
 - **평면도는 DB(base64)에 저장되므로 서버 재시작 후에도 유지됨**
 
 ### 데이터베이스
-- AWS RDS db.t3.micro 사용 중 (월 약 $20~25 비용 발생)
-- 24시간 센서 데이터 수신 환경에 최적화
-
-### DB 비밀번호 자동 교체
-- AWS Secrets Manager 자동 교체 비활성화 완료 (2026.04.09)
-- DB 연결 오류 발생 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트 필요
+- AWS RDS db.t3.micro (월 약 $20~25)
+- DB 비밀번호 자동 교체 비활성화 완료 (2026.04.09)
+- DB 연결 오류 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트
 
 ### 80053 비정상 데이터(raw=0) 3단계 방어
-1. /api/ingest: value < 100 차단 (DB 저장 자체 방지)
+1. /api/ingest: value < 100 차단
 2. 앱 시작 시: 기존 비정상 데이터 자동 삭제
 3. 에이전트: 전송 전 value < 100 필터링
 
 ### PATCH /api/sensors/:id 주의사항
-- `fields.length === 0` 체크는 반드시 모든 필드 추가 후 마지막에 위치해야 함
-- correction_params, formula_params, depth_criteria만 단독 전송 시에도 정상 저장되어야 함
+- `fields.length === 0` 체크는 반드시 모든 필드 추가 후 마지막에 위치
+- correction_params, formula_params, depth_criteria만 단독 전송 시에도 정상 저장
 
 ### 평면도 관련 API 주의사항
-- `PATCH /api/sites/:id`: 이름/위치/설명/담당자만 업데이트. `floor_plan_url` 컬럼 절대 건드리지 않음
-- `POST /api/sites/:id/floor-plan`: 평면도 전용 업로드 API. 이 API를 통해서만 floor_plan_url 변경 가능
-- `POST /api/sensors/:id/floor-plan`: sensors가 아닌 sites 테이블에 저장 (현장 단위 통일)
-- `PATCH /api/sites/:id/sensor-positions`: positions JSON 객체 전체를 교체 방식으로 저장
-- 평면도 서빙 API는 인증 없이 공개 (`requireAuth` 없음) — img 태그에서 직접 호출하기 때문
-- `depth_criteria` 저장 시 JSON.stringify() 적용 필요 (formula_params와 동일)
+- `PATCH /api/sites/:id`: 이름/위치/설명/담당자만 업데이트, `floor_plan_url` 컬럼 건드리지 않음
+- `POST /api/sites/:id/floor-plan`: 평면도 전용 업로드 API
+- `PATCH /api/sites/:id/sensor-positions`: positions JSON 객체 전체 교체 방식
+- 평면도 서빙 API는 인증 없이 공개 (`requireAuth` 없음)
+- `depth_criteria` 저장 시 JSON.stringify() 적용 필요
 
-### mathjs 패키지 주의사항 — v1.5.0
-- `package.json`에 `"mathjs": "^13.0.0"` 반드시 명시 (Render `npm install` 기준으로 설치)
-- `npm install mathjs`만으로는 CI/CD 환경에서 설치 보장 안 됨 → package.json에 직접 추가 필요
+### mathjs 패키지 주의사항
+- `package.json`에 `"mathjs": "^13.0.0"` 반드시 명시
 - Render 배포 시 `Cannot find module 'mathjs'` 오류 발생 시 package.json 확인
 
-### formula_params 구조 변경 — v1.5.0
-- 80053은 depth별 신구조 `{ "1": {G,K,A,B,C}, ... }` 사용
-- 일반 센서는 기존 구조 `{ "coeffA": ..., "coeffG": ... }` 유지 가능
+### formula_params 구조
+- 80053: depth별 신구조 `{ "1": {G,K,A,B,C,I}, ... }` 사용
+- 일반 센서: 기존 구조 `{ "coeffA": ..., "coeffG": ... }` 유지 가능
 - 프론트에서 `base.A || base.coeffA` 호환 처리 적용됨
+- I(초기값): formula_params['1'].I 또는 formula_params.I로 저장
