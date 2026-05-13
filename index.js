@@ -805,7 +805,7 @@ app.get('/api/sites', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT id, site_code, name, location, description, managers,
              (floor_plan_url IS NOT NULL) AS has_floor_plan,
-             sensor_positions
+             sensor_positions, latitude, longitude
       FROM sites ORDER BY id`)
     res.json(rows.map(s => ({ ...s, managers: JSON.parse(s.managers || '[]') })))
   } catch (err) { res.status(500).json({ error: err.message }) }
