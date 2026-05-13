@@ -825,12 +825,12 @@ app.post('/api/sites', requireAuth, requireRole(NON_MULTIMONITOR), async (req, r
 })
 
 app.patch('/api/sites/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, location, description, managers } = req.body
+  const { name, location, description, managers, latitude, longitude } = req.body
   try {
     await pool.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
     await pool.query(
-      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4 WHERE id=$5`,
-      [name, location, description, JSON.stringify(managers || []), req.params.id])
+      `UPDATE sites SET name=$1, location=$2, description=$3, managers=$4, latitude=$5, longitude=$6 WHERE id=$7`,
+      [name, location, description, JSON.stringify(managers || []), latitude ?? null, longitude ?? null, req.params.id])
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -1411,6 +1411,12 @@ app.get('/api/agent/status', requireAuth, async (req, res) => {
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
+
+await pool.query(`
+  ALTER TABLE sites
+  ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION
+`)
 
 // 앱 시작 시 필요한 컬럼 자동 생성
 pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
