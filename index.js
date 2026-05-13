@@ -40,7 +40,7 @@ const swaggerOptions = {
     openapi: '3.0.0',
     info: {
       title: 'GeoMonitor API',
-      version: '1.4.1',
+      version: '1.7.0',
       description: '지반 계측 모니터링 시스템 API\n\n**인증 방법**: 로그인 후 발급된 JWT 토큰을 Authorize 버튼에 입력\n\n**에이전트 전용 API** (`/api/ingest`, `/api/agent/*`, `/api/recollect/pending`)는 현장 PC 에이전트에서만 사용하며 앱 개발 시 불필요합니다.',
     },
     servers: [{ url: 'https://yuhyun-sensor-monitoring-back.onrender.com' }],
@@ -64,6 +64,7 @@ const swaggerOptions = {
       { name: '재수집', description: '데이터 재수집 요청' },
       { name: '에이전트', description: '에이전트 heartbeat 및 상태 조회' },
       { name: '계산식', description: '계산식 관리' },
+      { name: '지오코딩', description: '주소 → 좌표 변환 (카카오 REST API 프록시)' },
       { name: '시스템', description: '헬스체크' },
     ],
     paths: {
@@ -283,7 +284,7 @@ const swaggerOptions = {
       '/api/sites': {
         get: {
           tags: ['현장'], summary: '현장 목록 조회', security: [],
-          responses: { 200: { description: '현장 목록 (has_floor_plan, sensor_positions 포함)' } }
+          responses: { 200: { description: '현장 목록 (has_floor_plan, sensor_positions, latitude, longitude 포함)' } }
         },
         post: {
           tags: ['현장'], summary: '현장 추가',
@@ -293,7 +294,9 @@ const swaggerOptions = {
               name: { type: 'string', example: '김포 풍무 현장' },
               location: { type: 'string', example: '경기도 김포시' },
               description: { type: 'string' },
-              managers: { type: 'array', items: { type: 'string' } }
+              managers: { type: 'array', items: { type: 'string' } },
+              latitude: { type: 'number', example: 37.5665, description: '현장 위도' },
+              longitude: { type: 'number', example: 126.9780, description: '현장 경도' }
             }, required: ['name'] } } }
           },
           responses: { 201: { description: '현장 추가 성공' } }
@@ -301,14 +304,16 @@ const swaggerOptions = {
       },
       '/api/sites/{id}': {
         patch: {
-          tags: ['현장'], summary: '현장 수정 (이름/위치/설명/담당자만 — floor_plan_url 미변경)',
+          tags: ['현장'], summary: '현장 수정 (이름/위치/설명/담당자/좌표 — floor_plan_url 미변경)',
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
           requestBody: {
             content: { 'application/json': { schema: { type: 'object', properties: {
               name: { type: 'string' },
               location: { type: 'string' },
               description: { type: 'string' },
-              managers: { type: 'array', items: { type: 'string' } }
+              managers: { type: 'array', items: { type: 'string' } },
+              latitude: { type: 'number', example: 37.5665, description: '현장 위도' },
+              longitude: { type: 'number', example: 126.9780, description: '현장 경도' }
             } } } }
           },
           responses: { 200: { description: '수정 완료 (평면도는 /floor-plan API로만 변경 가능)' } }
@@ -452,6 +457,22 @@ const swaggerOptions = {
       },
       '/api/agent/status': {
         get: { tags: ['에이전트'], summary: '에이전트 상태 조회', security: [], responses: { 200: { description: '에이전트 온라인/오프라인 상태' } } }
+      },
+
+      // ── 지오코딩 ──
+      '/api/geocode': {
+        get: {
+          tags: ['지오코딩'], summary: '주소 → 좌표 변환 (카카오 REST API 프록시)', security: [],
+          description: '브라우저에서 카카오 REST API를 직접 호출하면 401 오류가 발생하므로, 서버에서 대신 호출하여 결과를 반환합니다. 환경변수 KAKAO_REST_KEY 필요.',
+          parameters: [
+            { name: 'query', in: 'query', required: true, schema: { type: 'string' }, description: '검색할 주소 (예: 경기도 김포시 풍무동)', example: '경기도 김포시 풍무동' }
+          ],
+          responses: {
+            200: { description: '카카오 지오코딩 결과 (documents 배열 포함)' },
+            400: { description: 'query 파라미터 누락' },
+            500: { description: '카카오 API 호출 실패 또는 KAKAO_REST_KEY 미설정' }
+          }
+        }
       },
 
       // ── 계산식 ──

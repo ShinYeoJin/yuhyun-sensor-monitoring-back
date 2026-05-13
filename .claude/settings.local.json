@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/ATIV1/Desktop/yuhyun-sensor-monitoring-back diff --stat)",
+      "Bash(git -C /Users/ATIV1/Desktop/yuhyun-sensor-monitoring-back log --oneline -3)"
+    ]
+  }
+}

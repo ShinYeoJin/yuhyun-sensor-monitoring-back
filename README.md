@@ -47,6 +47,7 @@ AGENT_API_KEY=geomonitor-secret-2026
 FRONTEND_URL=https://yuhyun-sensor-monitoring-front.vercel.app
 JWT_SECRET=geomonitor-jwt-secret-2026
 PORT=4000
+KAKAO_REST_KEY=...   # 카카오 REST API 키 (지오코딩 프록시용, Render 환경변수 등록 완료)
 ```
 
 ## 📡 주요 API
@@ -73,10 +74,11 @@ PORT=4000
 | GET | /api/alarms | 알람 목록 | - |
 | PATCH | /api/alarms/:id/acknowledge | 알람 확인 | JWT + NonMultiMonitor |
 | GET | /api/dashboard | 대시보드 요약 | - |
-| GET | /api/sites | 현장 목록 조회 (has_floor_plan boolean, sensor_positions 포함) | - |
+| GET | /api/sites | 현장 목록 조회 (has_floor_plan boolean, sensor_positions, latitude, longitude 포함) | - |
 | POST | /api/sites | 현장 추가 | JWT + NonMultiMonitor |
-| PATCH | /api/sites/:id | 현장 수정 (이름/위치/설명/담당자만 — floor_plan_url 미포함) | JWT + NonMultiMonitor |
+| PATCH | /api/sites/:id | 현장 수정 (이름/위치/설명/담당자/latitude/longitude — floor_plan_url 미포함) | JWT + NonMultiMonitor |
 | DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
+| GET | /api/geocode | 주소 → 좌표 변환 프록시 (카카오 REST API, ?query=주소) | - |
 | GET | /api/users | 전체 사용자 목록 | JWT + NonMultiMonitor |
 | GET | /api/users/list | 사용자 목록 (인증 없음) | - |
 | PATCH | /api/users/:id/edit | 사용자 정보 수정 | JWT + NonMultiMonitor |
@@ -137,6 +139,8 @@ sites 테이블 추가 컬럼 (자동 마이그레이션):
                      ※ PATCH /api/sites/:id 로는 절대 변경되지 않음
 - sensor_positions:  센서 아이콘 위치 및 이름 (JSONB)
   예: { "7:1": { "label": "WL-01", "x": 0.3, "y": 0.5 } }
+- latitude:          현장 위도 (DOUBLE PRECISION) — GET/PATCH /api/sites/:id 반영
+- longitude:         현장 경도 (DOUBLE PRECISION) — GET/PATCH /api/sites/:id 반영
 ```
 
 ## 🖼 평면도 관리 구조
@@ -290,6 +294,12 @@ pm2 status
 - **v1.6.0** (2026.05.07~08)
   - **sensors 목록 쿼리에 formula_params 컬럼 추가**: current_value raw값 표시 버그 수정
   - **formula_params에 I(초기값) 저장 지원**: measurements API에서 formula_params.I 우선 사용
+- **v1.7.0** (2026.05.14)
+  - **sites 테이블 latitude/longitude 컬럼 자동 마이그레이션 추가**
+  - **GET /api/sites SELECT절에 latitude, longitude 포함**: 저장 후 좌표가 사라지는 버그 수정
+  - **PATCH /api/sites/:id에 latitude/longitude 저장 처리 추가**
+  - **GET /api/geocode 프록시 엔드포인트 추가**: 카카오 REST API 호출 후 결과 반환 (브라우저 직접 호출 시 401 오류 우회)
+  - **Render 환경변수 KAKAO_REST_KEY 등록 완료**
 
 ## ⚠️ 주의사항
 
@@ -322,6 +332,12 @@ pm2 status
 - `PATCH /api/sites/:id/sensor-positions`: positions JSON 객체 전체 교체 방식
 - 평면도 서빙 API는 인증 없이 공개 (`requireAuth` 없음)
 - `depth_criteria` 저장 시 JSON.stringify() 적용 필요
+
+### 지오코딩(카카오) 주의사항
+- 카카오 REST API는 브라우저에서 직접 호출 시 CORS/인증 오류(401) 발생
+- `/api/geocode?query=주소` 프록시를 통해 서버에서 호출 후 결과 반환
+- 환경변수 `KAKAO_REST_KEY` 미설정 시 geocode API 500 오류 발생
+- Render 환경변수에 등록 완료 (2026.05.14)
 
 ### mathjs 패키지 주의사항
 - `package.json`에 `"mathjs": "^13.0.0"` 반드시 명시
