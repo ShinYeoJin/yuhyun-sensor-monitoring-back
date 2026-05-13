@@ -1412,11 +1412,13 @@ app.get('/api/agent/status', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-await pool.query(`
+pool.query(`
   ALTER TABLE sites
   ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
   ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION
 `)
+  .then(() => console.log('[DB] sites.latitude/longitude 컬럼 확인 완료'))
+  .catch(err => console.error('[DB] 컬럼 생성 오류:', err.message))
 
 // 앱 시작 시 필요한 컬럼 자동 생성
 pool.query(`ALTER TABLE sensors ADD COLUMN IF NOT EXISTS floor_plan_url TEXT`)
