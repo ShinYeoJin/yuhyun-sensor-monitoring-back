@@ -33,6 +33,7 @@ const { JWT_SECRET, requireAuth, requireRole, requireKey, NON_MULTIMONITOR } = r
 const { UPLOAD_DIR, upload, floorPlanUpload } = require('./config/upload')
 const authRoutes  = require('./routes/auth')
 const userRoutes  = require('./routes/users')
+const fileRoutes  = require('./routes/files')
 const pool = require('./db')
 
 const app = express()
@@ -44,6 +45,7 @@ app.use('/uploads', express.static(UPLOAD_DIR))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use(authRoutes)
 app.use(userRoutes)
+app.use(fileRoutes)
 
 function evalStatus(value, sensor) {
   const dMin = sensor.threshold_danger_min
@@ -66,45 +68,6 @@ async function maybeCreateAlarm(client, sensor, status, value) {
       status === 'danger' ? `위험 임계값(${threshVal}) 초과 — 즉시 점검 필요` : `주의 임계값(${threshVal}) 도달 — 모니터링 강화 필요`,
       value, threshVal])
 }
-
-app.post('/api/files/upload', requireAuth, upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: '파일이 없습니다' })
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO files (filename, original_name, file_path, file_size, mime_type, uploaded_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [req.file.filename, req.file.originalname, req.file.path, req.file.size, req.file.mimetype, req.user.id])
-    res.status(201).json({ success: true, file: rows[0] })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.get('/api/files', requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT f.*, u.username AS uploaded_by_name FROM files f LEFT JOIN users u ON f.uploaded_by=u.id ORDER BY f.created_at DESC`)
-    res.json(rows)
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.get('/api/files/:id/download', requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(`SELECT * FROM files WHERE id=$1`, [req.params.id])
-    if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다' })
-    const file = rows[0]
-    if (!fs.existsSync(file.file_path)) return res.status(404).json({ error: '파일이 서버에 없습니다' })
-    res.download(file.file_path, file.original_name)
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.delete('/api/files/:id', requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(`SELECT * FROM files WHERE id=$1`, [req.params.id])
-    if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다' })
-    const file = rows[0]
-    if (fs.existsSync(file.file_path)) fs.unlinkSync(file.file_path)
-    await pool.query(`DELETE FROM files WHERE id=$1`, [req.params.id])
-    res.json({ success: true, message: '파일 삭제 완료' })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
 
 app.post('/api/ingest', requireKey, async (req, res) => {
   const { sensorCode, measurements, rawFile } = req.body
