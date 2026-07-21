@@ -35,6 +35,7 @@ const fs       = require('fs')
 const swaggerUi = require('swagger-ui-express')
 
 const swaggerSpec = require('./swagger/spec')
+const { JWT_SECRET, requireAuth, requireRole, requireKey, NON_MULTIMONITOR } = require('./middleware/auth')
 
 const app = express()
 const pool = new Pool({
@@ -42,7 +43,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 })
 
-const JWT_SECRET = process.env.JWT_SECRET || 'geomonitor-jwt-secret-2026'
 const UPLOAD_DIR = path.join(__dirname, 'uploads')
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
@@ -59,35 +59,6 @@ app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'
 app.use(express.json({ limit: '20mb' }))
 app.use('/uploads', express.static(UPLOAD_DIR))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
-
-function requireKey(req, res, next) {
-  if (req.headers['x-api-key'] !== process.env.AGENT_API_KEY)
-    return res.status(401).json({ error: 'Unauthorized' })
-  next()
-}
-
-function requireAuth(req, res, next) {
-  const auth = req.headers.authorization
-  if (!auth || !auth.startsWith('Bearer '))
-    return res.status(401).json({ error: 'No token provided' })
-  try {
-    req.user = jwt.verify(auth.slice(7), JWT_SECRET)
-    next()
-  } catch {
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
-
-const NON_MULTIMONITOR = ['admin', 'Administrator', 'Manager', 'Operator', 'Monitor']
-
-function requireRole(allowedRoles) {
-  return (req, res, next) => {
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: '접근 권한이 없습니다.' })
-    }
-    next()
-  }
-}
 
 function evalStatus(value, sensor) {
   const dMin = sensor.threshold_danger_min
