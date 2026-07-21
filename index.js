@@ -12,6 +12,8 @@ const userRoutes  = require('./routes/users')
 const fileRoutes  = require('./routes/files')
 const siteRoutes    = require('./routes/sites')
 const sensorRoutes  = require('./routes/sensors')
+const alarmRoutes   = require('./routes/alarms')
+const formulaRoutes = require('./routes/formulas')
 const pool = require('./db')
 
 const app = express()
@@ -26,6 +28,8 @@ app.use(userRoutes)
 app.use(fileRoutes)
 app.use(siteRoutes)
 app.use(sensorRoutes)
+app.use(alarmRoutes)
+app.use(formulaRoutes)
 
 function evalStatus(value, sensor) {
   const dMin = sensor.threshold_danger_min
@@ -103,126 +107,6 @@ app.post('/api/ingest', requireKey, async (req, res) => {
     console.error('[ingest error]', err.message)
     res.status(500).json({ error: err.message })
   } finally { client.release() }
-})
-
-app.get('/api/alarms', async (req, res) => {
-  const { acknowledged, limit = 50 } = req.query
-  try {
-    let where = ''
-    if (acknowledged === 'false') where = 'WHERE ae.is_acknowledged = false'
-    const { rows } = await pool.query(`
-      SELECT ae.*, s.name AS sensor_name, s.manage_no, s.sensor_code, s.unit, si.name AS site_name
-      FROM alarm_events ae
-      JOIN sensors s ON ae.sensor_id = s.id
-      JOIN sites si ON s.site_id = si.id
-      ${where} ORDER BY ae.triggered_at DESC LIMIT $1`, [Number(limit)])
-    res.json(rows)
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.patch('/api/alarms/:id/acknowledge', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { acknowledgedBy = '관리자' } = req.body
-  try {
-    await pool.query(
-      `UPDATE alarm_events SET is_acknowledged=true, acknowledged_by=$1, acknowledged_at=NOW() WHERE id=$2`,
-      [acknowledgedBy, req.params.id])
-    res.json({ success: true })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    const [statusRes, alarmRes, recentRes] = await Promise.all([
-      pool.query(`SELECT status, COUNT(*) AS cnt FROM sensor_status GROUP BY status`),
-      pool.query(`SELECT COUNT(*) AS cnt FROM alarm_events WHERE is_acknowledged=false`),
-      pool.query(`
-        SELECT ae.id, ae.severity, ae.message, ae.triggered_at,
-               s.manage_no AS sensor_id, s.name AS sensor_name, si.name AS site_name
-        FROM alarm_events ae
-        JOIN sensors s ON ae.sensor_id=s.id
-        JOIN sites si ON s.site_id=si.id
-        ORDER BY ae.triggered_at DESC LIMIT 5`),
-    ])
-    const counts = {}
-    statusRes.rows.forEach(r => { counts[r.status] = parseInt(r.cnt) })
-    res.json({
-      totalSensors: Object.values(counts).reduce((a,b)=>a+b, 0),
-      normalCount: counts.normal || 0, warningCount: counts.warning || 0,
-      dangerCount: counts.danger || 0, offlineCount: counts.offline || 0,
-      activeAlarms: parseInt(alarmRes.rows[0].cnt), recentAlarms: recentRes.rows,
-    })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// ─── 계산식 관리 API ───────────────────────────────────────────────────────────
-// 계산식 목록 조회 (전체 공개)
-app.get('/api/formulas', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM formulas WHERE is_active=true ORDER BY id`)
-    res.json(rows)
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 계산식 추가 (관리자만)
-app.post('/api/formulas', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, expression, description } = req.body
-  if (!name || !expression) return res.status(400).json({ error: '이름과 계산식은 필수입니다.' })
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO formulas (name, expression, description) VALUES ($1,$2,$3) RETURNING *`,
-      [name, expression, description || ''])
-    res.status(201).json({ success: true, formula: rows[0] })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 계산식 수정 (관리자만)
-app.patch('/api/formulas/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  const { name, expression, description } = req.body
-  try {
-    const { rows } = await pool.query(
-      `UPDATE formulas SET name=$1, expression=$2, description=$3 WHERE id=$4 RETURNING *`,
-      [name, expression, description, req.params.id])
-    res.json({ success: true, formula: rows[0] })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 계산식 삭제 (관리자만)
-app.delete('/api/formulas/:id', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  try {
-    await pool.query(`UPDATE formulas SET is_active=false WHERE id=$1`, [req.params.id])
-    res.json({ success: true })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 현장 평면도 이미지 서빙
-app.get('/api/sites/:id/floor-plan-image', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT floor_plan_url FROM sites WHERE id=$1`, [req.params.id]
-    )
-    if (rows.length === 0 || !rows[0].floor_plan_url) return res.status(404).json({ error: 'Not found' })
-    const base64 = rows[0].floor_plan_url
-    const matches = base64.match(/^data:(.+);base64,(.+)$/)
-    if (!matches) return res.status(400).json({ error: 'Invalid format' })
-    const mimeType = matches[1]
-    const buffer = Buffer.from(matches[2], 'base64')
-    res.setHeader('Content-Type', mimeType)
-    res.setHeader('Cache-Control', 'public, max-age=86400')
-    res.send(buffer)
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 현장 센서 아이콘 위치 저장
-app.patch('/api/sites/:id/sensor-positions', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
-  try {
-    const { positions } = req.body
-    await pool.query(
-      `UPDATE sites SET sensor_positions=$1 WHERE id=$2`,
-      [JSON.stringify(positions), req.params.id]
-    )
-    res.json({ success: true })
-  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 app.get('/api/health', async (req, res) => {
