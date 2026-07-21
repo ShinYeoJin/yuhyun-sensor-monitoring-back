@@ -26,26 +26,23 @@ function applyFormula(rawValue, initRawValue, formulaExpression, formulaParams, 
   })
 }
 const cors     = require('cors')
-const { Pool } = require('pg')
-const jwt      = require('jsonwebtoken')
 const bcrypt   = require('bcryptjs')
 const swaggerUi = require('swagger-ui-express')
 
 const swaggerSpec = require('./swagger/spec')
 const { JWT_SECRET, requireAuth, requireRole, requireKey, NON_MULTIMONITOR } = require('./middleware/auth')
 const { UPLOAD_DIR, upload, floorPlanUpload } = require('./config/upload')
+const authRoutes = require('./routes/auth')
+const pool = require('./db')
 
 const app = express()
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-})
 
 
 app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'] }))
 app.use(express.json({ limit: '20mb' }))
 app.use('/uploads', express.static(UPLOAD_DIR))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+app.use(authRoutes)
 
 function evalStatus(value, sensor) {
   const dMin = sensor.threshold_danger_min
@@ -68,56 +65,6 @@ async function maybeCreateAlarm(client, sensor, status, value) {
       status === 'danger' ? `위험 임계값(${threshVal}) 초과 — 즉시 점검 필요` : `주의 임계값(${threshVal}) 도달 — 모니터링 강화 필요`,
       value, threshVal])
 }
-
-app.post('/api/auth/register', async (req, res) => {
-  const { username, email, password, phone = '' } = req.body
-  const role = 'MultiMonitor'
-  if (!username || !email || !password)
-    return res.status(400).json({ error: 'username, email, password 필수' })
-  try {
-    const hash = await bcrypt.hash(password, 10)
-    const { rows } = await pool.query(
-      `INSERT INTO users (username, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5) RETURNING id, username, email, role, phone`,
-      [username, email, hash, role, phone])
-    res.status(201).json({ success: true, user: rows[0] })
-  } catch (err) {
-    if (err.code === '23505') return res.status(400).json({ error: '이미 존재하는 username 또는 email' })
-    res.status(500).json({ error: err.message })
-  }
-})
-
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body
-  if (!email || !password)
-    return res.status(400).json({ error: 'email, password 필수' })
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM users WHERE email=$1 AND is_deleted=false`, [email])
-    if (rows.length === 0) return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' })
-    const user = rows[0]
-    if (!user.is_active) return res.status(401).json({ error: '비활성화된 계정입니다' })
-    const valid = await bcrypt.compare(password, user.password_hash)
-    if (!valid) return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다' })
-    await pool.query(`UPDATE users SET last_login=NOW() WHERE id=$1`, [user.id])
-    const token = jwt.sign(
-      { id: user.id, username: user.username, email: user.email, role: user.role },
-      JWT_SECRET, { expiresIn: '24h' })
-    res.json({ success: true, token, user: { id: user.id, username: user.username, email: user.email, role: user.role } })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  res.json({ success: true, message: '로그아웃 완료' })
-})
-
-app.get('/api/auth/me', requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, username, email, role, is_active, created_at, last_login FROM users WHERE id=$1`, [req.user.id])
-    if (rows.length === 0) return res.status(404).json({ error: 'User not found' })
-    res.json(rows[0])
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
 
 app.get('/api/users', requireAuth, requireRole(NON_MULTIMONITOR), async (req, res) => {
   try {
