@@ -29,13 +29,11 @@ const cors     = require('cors')
 const { Pool } = require('pg')
 const jwt      = require('jsonwebtoken')
 const bcrypt   = require('bcryptjs')
-const multer   = require('multer')
-const path     = require('path')
-const fs       = require('fs')
 const swaggerUi = require('swagger-ui-express')
 
 const swaggerSpec = require('./swagger/spec')
 const { JWT_SECRET, requireAuth, requireRole, requireKey, NON_MULTIMONITOR } = require('./middleware/auth')
+const { UPLOAD_DIR, upload, floorPlanUpload } = require('./config/upload')
 
 const app = express()
 const pool = new Pool({
@@ -43,17 +41,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 })
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads')
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9)
-    cb(null, unique + path.extname(file.originalname))
-  }
-})
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
 app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'] }))
 app.use(express.json({ limit: '20mb' }))
@@ -691,17 +678,6 @@ app.delete('/api/formulas/:id', requireAuth, requireRole(NON_MULTIMONITOR), asyn
     await pool.query(`UPDATE formulas SET is_active=false WHERE id=$1`, [req.params.id])
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// 평면도 업로드용 multer (메모리 저장 — base64로 DB에 저장)
-const floorPlanUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
-  fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
-    if (allowed.includes(file.mimetype)) cb(null, true)
-    else cb(new Error('이미지(JPG, PNG) 또는 PDF 파일만 업로드 가능합니다.'))
-  }
 })
 
 // 센서 평면도 업로드
