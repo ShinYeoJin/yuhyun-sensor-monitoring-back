@@ -28,7 +28,27 @@ GeoMonitor 백엔드는 지반 계측 센서 데이터를 수신·저장·제공
 
 ## 📁 프로젝트 구조
 ```
-index.js          # 메인 서버 파일
+index.js                          # 서버 설정, 미들웨어 등록, DB 초기화만 담당 (115줄)
+middleware/
+└── auth.js                       # 인증/권한 미들웨어 (requireAuth, requireRole, requireKey)
+config/
+└── upload.js                     # 파일 업로드(multer) 설정
+utils/
+└── formula.js                    # 센서 계산식 적용 로직 (calculateValue, applyFormula)
+swagger/
+└── spec.js                       # Swagger API 문서 스펙 정의
+routes/                           # 도메인별 API 라우트
+├── auth.js                       # 회원가입/로그인/로그아웃/내 정보 조회
+├── users.js                      # 사용자 관리 (목록/수정/비활성화/삭제 등)
+├── files.js                      # 파일 업로드/다운로드/삭제
+├── sites.js                      # 현장 관리, 평면도, 센서-현장 배정
+├── sensors.js                    # 센서 조회/수정/임계값/측정값/깊이 정보
+├── alarms.js                     # 알람 조회/확인 처리, 대시보드 요약
+├── formulas.js                   # 계산식 조회/추가/수정/삭제
+├── ingest.js                     # 센서 데이터 수신 (에이전트 전용)
+├── recollect.js                  # 데이터 재수집 요청
+├── agent.js                      # 현장 에이전트 상태 관리
+└── system.js                     # 헬스체크, 주소→좌표 변환(geocode)
 uploads/          # 업로드된 파일 저장 디렉토리
 package.json      # 패키지 정보 (mathjs: ^13.0.0 포함)
 .env              # 환경변수 (gitignore)
@@ -300,6 +320,13 @@ pm2 status
   - **PATCH /api/sites/:id에 latitude/longitude 저장 처리 추가**
   - **GET /api/geocode 프록시 엔드포인트 추가**: 카카오 REST API 호출 후 결과 반환 (브라우저 직접 호출 시 401 오류 우회)
   - **Render 환경변수 KAKAO_REST_KEY 등록 완료**
+- **v1.8.0** (2026.07.21) — 대규모 라우트 리팩터링
+  - **index.js: 1,523줄 → 115줄 (92.4% 감소)**
+  - 모든 라우트를 도메인별 파일(routes/)로 분리 (auth, users, files, sites, sensors, alarms, formulas, ingest, recollect, agent, system)
+  - 인증/권한 미들웨어를 `middleware/auth.js`로 분리
+  - 파일 업로드 설정을 `config/upload.js`로 분리
+  - Swagger API 문서 스펙을 `swagger/spec.js`로 분리
+  - 센서 계산식 로직을 `utils/formula.js`로 분리
 
 ## ⚠️ 주의사항
 
