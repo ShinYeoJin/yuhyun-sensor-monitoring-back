@@ -17,7 +17,7 @@ GeoMonitor 백엔드는 지반 계측 센서 데이터를 수신·저장·제공
 
 - **Runtime**: Node.js
 - **Framework**: Express.js
-- **Database**: PostgreSQL (AWS RDS db.t3.micro)
+- **Database**: PostgreSQL (개발 초기 AWS RDS db.t3.micro → 현재 Supabase Session Pooler, aws-1-ap-northeast-2.pooler.supabase.com)
 - **인증**: JWT (jsonwebtoken)
 - **암호화**: bcryptjs
 - **수식 계산**: mathjs (계산식 일반화 — v1.5.0, package.json에 반드시 명시)
@@ -340,9 +340,9 @@ pm2 status
 - **평면도는 DB(base64)에 저장되므로 서버 재시작 후에도 유지됨**
 
 ### 데이터베이스
-- AWS RDS db.t3.micro (월 약 $20~25)
-- DB 비밀번호 자동 교체 비활성화 완료 (2026.04.09)
-- DB 연결 오류 시 AWS Secrets Manager에서 최신 비밀번호 확인 후 Render 환경변수 DATABASE_URL 업데이트
+- 개발 초기(~2026.05): AWS RDS db.t3.micro 사용
+- 현재: Supabase Session Pooler (aws-1-ap-northeast-2.pooler.supabase.com)
+- DB 연결 오류 시 Render 환경변수 DATABASE_URL 확인
 
 ### 80053 비정상 데이터(raw=0) 3단계 방어
 1. /api/ingest: value < 100 차단
