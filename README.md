@@ -18,6 +18,7 @@ GeoMonitor 백엔드는 지반 계측 센서 데이터를 수신·저장·제공
 - **Runtime**: Node.js
 - **Framework**: Express.js
 - **Database**: PostgreSQL (개발 초기 AWS RDS db.t3.micro → 현재 Supabase Session Pooler, aws-1-ap-northeast-2.pooler.supabase.com)
+- **환경변수**: dotenv (^16.4.5)
 - **인증**: JWT (jsonwebtoken)
 - **암호화**: bcryptjs
 - **수식 계산**: mathjs (계산식 일반화 — v1.5.0, package.json에 반드시 명시)
@@ -100,7 +101,9 @@ KAKAO_REST_KEY=...   # 카카오 REST API 키 (지오코딩 프록시용, Render
 | DELETE | /api/sites/:id | 현장 삭제 | JWT + NonMultiMonitor |
 | GET | /api/geocode | 주소 → 좌표 변환 프록시 (카카오 REST API, ?query=주소) | - |
 | GET | /api/users | 전체 사용자 목록 | JWT + NonMultiMonitor |
+| GET | /api/users/active | 활성 사용자 목록 | JWT + NonMultiMonitor |
 | GET | /api/users/list | 사용자 목록 (인증 없음) | - |
+| PATCH | /api/users/:id | 사용자 정보 직접 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/users/:id/edit | 사용자 정보 수정 | JWT + NonMultiMonitor |
 | PATCH | /api/users/:id/password | 비밀번호 변경 | JWT (본인만) |
 | PATCH | /api/users/:id/deactivate | 사용자 비활성화 | JWT + NonMultiMonitor |
@@ -111,7 +114,7 @@ KAKAO_REST_KEY=...   # 카카오 REST API 키 (지오코딩 프록시용, Render
 | GET | /api/files/:id/download | 다운로드 | JWT |
 | DELETE | /api/files/:id | 파일 삭제 | JWT |
 | POST | /api/recollect | 재수집 요청 등록 | JWT + NonMultiMonitor |
-| GET | /api/recollect | 재수집 요청 목록 조회 | JWT |
+| GET | /api/recollect | 재수집 요청 목록 조회 | JWT + NonMultiMonitor |
 | GET | /api/recollect/pending | 처리 대기 요청 조회 (에이전트용) | API Key |
 | PATCH | /api/recollect/:id/done | 재수집 완료 처리 (에이전트용) | API Key |
 | DELETE | /api/recollect/:id | 재수집 요청 취소 | JWT |
