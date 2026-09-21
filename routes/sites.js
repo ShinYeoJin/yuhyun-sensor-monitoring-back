@@ -14,7 +14,12 @@ router.get('/api/sites', async (req, res) => {
              (floor_plan_url IS NOT NULL) AS has_floor_plan,
              sensor_positions, latitude, longitude
       FROM sites ORDER BY id`)
-    res.json(rows.map(s => ({ ...s, managers: JSON.parse(s.managers || '[]') })))
+    res.json(rows.map(s => ({
+      ...s,
+      managers:  JSON.parse(s.managers || '[]'),
+      latitude:  s.latitude  != null ? parseFloat(s.latitude)  : null,
+      longitude: s.longitude != null ? parseFloat(s.longitude) : null,
+    })))
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
