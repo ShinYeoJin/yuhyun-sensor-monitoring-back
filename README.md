@@ -323,6 +323,8 @@ pm2 status
   - **PATCH /api/sites/:id에 latitude/longitude 저장 처리 추가**
   - **GET /api/geocode 프록시 엔드포인트 추가**: 카카오 REST API 호출 후 결과 반환 (브라우저 직접 호출 시 401 오류 우회)
   - **Render 환경변수 KAKAO_REST_KEY 등록 완료**
+- **v1.8.1** (2026.09.21) — 버그 수정
+  - **GET /api/sites latitude/longitude 숫자형 통일**: PostgreSQL NUMERIC 컬럼이 문자열로 반환되는 문제를 `parseFloat()` 명시 변환으로 수정 (프론트 `toFixed()` 오류 방지)
 - **v1.8.0** (2026.07.21) — 대규모 라우트 리팩터링
   - **index.js: 1,523줄 → 115줄 (92.4% 감소)**
   - 모든 라우트를 도메인별 파일(routes/)로 분리 (auth, users, files, sites, sensors, alarms, formulas, ingest, recollect, agent, system)
