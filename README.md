@@ -62,14 +62,18 @@ node index.js
 ```
 
 ## 🔐 환경변수
-```env
-DATABASE_URL=postgresql://...
-AGENT_API_KEY=geomonitor-secret-2026
-FRONTEND_URL=https://yuhyun-sensor-monitoring-front.vercel.app
-JWT_SECRET=geomonitor-jwt-secret-2026
-PORT=4000
-KAKAO_REST_KEY=...   # 카카오 REST API 키 (지오코딩 프록시용, Render 환경변수 등록 완료)
-```
+
+아래 변수들은 배포 전 Render 대시보드에서 직접 설정해야 합니다.
+설정 여부는 코드로 확인할 수 없으므로, 반드시 직접 확인하세요.
+
+| 변수명 | 필수 여부 | 설명 |
+|--------|----------|------|
+| `DATABASE_URL` | 필수 | PostgreSQL 연결 문자열 (Supabase Session Pooler URL) |
+| `JWT_SECRET` | 필수 | 토큰 서명 키 (임의의 긴 문자열) |
+| `FRONTEND_URL` | 필수 | CORS 허용할 프론트엔드 URL |
+| `AGENT_API_KEY` | 필수 | 에이전트 인증용 API 키 (X-API-Key 헤더) |
+| `KAKAO_REST_KEY` | 필수 | 카카오 REST API 키 (지오코딩 프록시용) |
+| `PORT` | 선택 | 서버 포트 (기본값: 4000) |
 
 ## 📡 주요 API
 
