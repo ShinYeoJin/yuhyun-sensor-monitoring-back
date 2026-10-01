@@ -23,7 +23,9 @@ const pool = require('./db')
 const app = express()
 
 
-app.use(cors({ origin: [process.env.FRONTEND_URL || '*', 'http://localhost:3000'] }))
+const allowedOrigins = ['http://localhost:3000']
+if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL)
+app.use(cors({ origin: allowedOrigins }))
 app.use(express.json({ limit: '20mb' }))
 app.use('/uploads', express.static(UPLOAD_DIR))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
