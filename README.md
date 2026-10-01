@@ -326,9 +326,7 @@ pm2 status
   - **GET /api/sites SELECT절에 latitude, longitude 포함**: 저장 후 좌표가 사라지는 버그 수정
   - **PATCH /api/sites/:id에 latitude/longitude 저장 처리 추가**
   - **GET /api/geocode 프록시 엔드포인트 추가**: 카카오 REST API 호출 후 결과 반환 (브라우저 직접 호출 시 401 오류 우회)
-  - **Render 환경변수 KAKAO_REST_KEY 등록 완료**
-- **v1.8.1** (2026.09.21) — 버그 수정
-  - **GET /api/sites latitude/longitude 숫자형 통일**: PostgreSQL NUMERIC 컬럼이 문자열로 반환되는 문제를 `parseFloat()` 명시 변환으로 수정 (프론트 `toFixed()` 오류 방지)
+  - **KAKAO_REST_KEY는 Render 환경변수에 설정이 필요합니다 (실제 설정 여부는 Render 대시보드에서 확인)**
 - **v1.8.0** (2026.07.21) — 대규모 라우트 리팩터링
   - **index.js: 1,523줄 → 115줄 (92.4% 감소)**
   - 모든 라우트를 도메인별 파일(routes/)로 분리 (auth, users, files, sites, sensors, alarms, formulas, ingest, recollect, agent, system)
@@ -336,11 +334,13 @@ pm2 status
   - 파일 업로드 설정을 `config/upload.js`로 분리
   - Swagger API 문서 스펙을 `swagger/spec.js`로 분리
   - 센서 계산식 로직을 `utils/formula.js`로 분리
+- **v1.8.1** (2026.09.21) — 버그 수정
+  - **GET /api/sites latitude/longitude 숫자형 통일**: PostgreSQL NUMERIC 컬럼이 문자열로 반환되는 문제를 `parseFloat()` 명시 변환으로 수정 (프론트 `toFixed()` 오류 방지)
 
 ## ⚠️ 주의사항
 
 ### 권한 관리
-- **NonMultiMonitor**: `Administrator`, `Manager`, `Operator`, `Monitor` 역할
+- **NonMultiMonitor**: `admin`, `Administrator`, `Manager`, `Operator`, `Monitor` 역할
 - **MultiMonitor**: 센서 조회 및 파일 관리만 가능
 - 최소 1개 이상의 관리자 계정을 항상 유지할 것
 
@@ -373,7 +373,7 @@ pm2 status
 - 카카오 REST API는 브라우저에서 직접 호출 시 CORS/인증 오류(401) 발생
 - `/api/geocode?query=주소` 프록시를 통해 서버에서 호출 후 결과 반환
 - 환경변수 `KAKAO_REST_KEY` 미설정 시 geocode API 500 오류 발생
-- Render 환경변수에 등록 완료 (2026.05.14)
+- KAKAO_REST_KEY는 Render 환경변수에 설정이 필요합니다 (실제 설정 여부는 Render 대시보드에서 확인)
 
 ### mathjs 패키지 주의사항
 - `package.json`에 `"mathjs": "^13.0.0"` 반드시 명시
