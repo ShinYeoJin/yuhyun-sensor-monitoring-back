@@ -29,7 +29,7 @@ GeoMonitor 백엔드는 지반 계측 센서 데이터를 수신·저장·제공
 
 ## 📁 프로젝트 구조
 ```
-index.js                          # 서버 설정, 미들웨어 등록, DB 초기화만 담당 (115줄)
+index.js                          # 서버 설정, 미들웨어 등록, DB 초기화만 담당 (117줄)
 middleware/
 └── auth.js                       # 인증/권한 미들웨어 (requireAuth, requireRole, requireKey)
 config/
@@ -121,9 +121,9 @@ node index.js
 | GET | /api/recollect | 재수집 요청 목록 조회 | JWT + NonMultiMonitor |
 | GET | /api/recollect/pending | 처리 대기 요청 조회 (에이전트용) | API Key |
 | PATCH | /api/recollect/:id/done | 재수집 완료 처리 (에이전트용) | API Key |
-| DELETE | /api/recollect/:id | 재수집 요청 취소 | JWT |
+| DELETE | /api/recollect/:id | 재수집 요청 취소 | JWT + NonMultiMonitor |
 | POST | /api/agent/heartbeat | 에이전트 온라인 상태 보고 | API Key |
-| GET | /api/agent/status | 에이전트 상태 조회 | - |
+| GET | /api/agent/status | 에이전트 상태 조회 | JWT |
 | GET | /api/formulas | 계산식 목록 (expression, variables, is_custom 포함) | - |
 | POST | /api/formulas | 계산식 추가 | JWT + NonMultiMonitor |
 | PATCH | /api/formulas/:id | 계산식 수정 | JWT + NonMultiMonitor |
