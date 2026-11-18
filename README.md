@@ -287,6 +287,11 @@ C:\geomonitor-agent\
 - **filterNew() 48시간 안전망**: 항상 최근 48시간 데이터 재확인
 - **processRecollectRequests() last_sent 업데이트 제거**: 재수집이 정기 전송의 last_sent를 덮어쓰지 않음
 
+### 데모 DB 정비 (2026.11.18)
+- **measurements 중복 저장 방지 제약**: 데모 DB(Supabase, PostgreSQL 17.6)에서 `uq_meas_sensor_time_depth`를 `UNIQUE NULLS NOT DISTINCT (sensor_id, measured_at, depth_label)`로 다시 만들었습니다. 기존 일반 `UNIQUE`는 `depth_label`이 NULL이면 같은 값으로 보지 않아 중복이 저장됐습니다. 같은 행을 두 번 넣는 테스트로 확인했습니다(수정 전 2건, 수정 후 1건). 이관된 운영 DB에는 적용하지 않았습니다. SQL은 `docs/measurements-unique-constraint.sql`에 있습니다.
+- **sensor_status 값 정정**: 샘플 데이터 생성 스크립트가 `measurements`에만 넣어서 `sensor_status`가 7월 값으로 남아 있었고, 센서 상세의 최신값과 어긋나 9월 21일 측정값에 맞춰 직접 고쳤습니다.
+- **샘플 데이터 범위**: 2026년 8월 1일부터 9월 21일까지 센서 2개, 센서당 1,248건(1시간 단위).
+
 ### 에이전트 실행 (pm2)
 ```powershell
 pm2 start agent.js --name geomonitor-agent
@@ -384,3 +389,7 @@ pm2 status
 - 일반 센서: 기존 구조 `{ "coeffA": ..., "coeffG": ... }` 유지 가능
 - 프론트에서 `base.A || base.coeffA` 호환 처리 적용됨
 - I(초기값): formula_params['1'].I 또는 formula_params.I로 저장
+
+### measurements 중복 저장 방지 주의사항
+- 서버는 `ON CONFLICT ON CONSTRAINT uq_meas_sensor_time_depth DO NOTHING`으로 같은 센서·시각·깊이의 데이터를 건너뜁니다.
+- 일반 `UNIQUE`로는 `depth_label`이 NULL인 행의 중복을 막지 못합니다. 데모 DB는 `NULLS NOT DISTINCT`로 다시 만들었고(`docs/measurements-unique-constraint.sql`), 이관된 운영 DB에는 적용하지 않았습니다.
